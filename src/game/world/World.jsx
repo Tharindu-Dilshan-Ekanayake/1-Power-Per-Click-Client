@@ -7,6 +7,8 @@ import { buildLayout } from './layout'
 import Portal from './Portal'
 import StageWall from './StageWall'
 import StaticBlocks from './StaticBlocks'
+import SwordPad from './SwordPad'
+import TrainingDummy from './TrainingDummy'
 
 /**
  * The whole map: the lobby, the gate, and every stage corridor behind it.
@@ -37,6 +39,12 @@ export function World() {
       ))}
       {layout.labels.map((label, i) => (
         <Label key={i} {...label} />
+      ))}
+      {layout.swordPads.map((pad) => (
+        <SwordPad key={pad.sword.id} {...pad} />
+      ))}
+      {layout.trainerPads.map((pad) => (
+        <TrainingDummy key={pad.trainer.id} {...pad} />
       ))}
     </>
   )

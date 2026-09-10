@@ -1,3 +1,5 @@
+import { SWORDS } from '../swords'
+import { TRAINERS } from '../trainers'
 import { mulberry32 } from './textures'
 import {
   CORRIDOR_HALF,
@@ -101,32 +103,102 @@ export function buildLayout() {
     }
   }
 
-  // Lawn dressing: trees at the outer corners, mushrooms scattered about.
-  for (const { x0, x1, z0, z1, sx, sz } of lawns) {
-    const farX = sx > 0 ? x1 - 5 : x0 + 5
-    const farZ = sz > 0 ? z1 - 5 : z0 + 5
-    tree(farX, 0, farZ, 1.1)
-    if (!(sx > 0 && sz > 0)) {
-      tree(farX - sx * 13, 0, farZ, 0.9)
-      tree(farX, 0, farZ - sz * 12, 1)
-    }
+  // Lawn dressing: just mushrooms. The lawns stay open, so the shop and training rows
+  // along the side walls are visible from anywhere in the plaza.
+  for (const { x0, x1, z0, z1 } of lawns) {
     for (let i = 0; i < 6; i++) {
       mushroom(x0 + 2 + rand() * (x1 - x0 - 4), z0 + 2 + rand() * (z1 - z0 - 4))
     }
   }
 
-  // A small jump course of coloured pillars on the north-east lawn.
+  // A small jump course of coloured pillars on the south-east lawn, ending on a high
+  // platform.
   const course = [
-    [12, 12, 1.2, 'red'],
-    [15.5, 15, 2.2, 'yellow'],
-    [19, 18, 3.2, 'blue'],
-    [22.5, 21, 4.2, 'purple'],
-    [26, 24, 5.2, 'green'],
-    [29.5, 27, 6.2, 'orange'],
+    [10, -10, 1.2, 'red'],
+    [13.5, -13, 2.2, 'yellow'],
+    [17, -16, 3.2, 'blue'],
+    [20.5, -19, 4.2, 'purple'],
+    [24, -22, 5.2, 'green'],
   ]
   for (const [x, z, h, m] of course) box(x - 1.25, 0, z - 1.25, x + 1.25, h, z + 1.25, m)
-  box(31.5, 0, 29, 35.5, 7.2, 33, 'yellow')
-  crystals.push({ position: [33.5, 7.2, 31], color: '#ffd23f', scale: 1.1 })
+  box(21, 0, -27.5, 25, 6.2, -24.5, 'orange')
+  crystals.push({ position: [23, 6.2, -26], color: '#ffd23f', scale: 1.1 })
+
+  // --- Sword shop (west wall) and training area (east wall) --------------------------
+  // Each row runs along a side wall of the lobby and faces into the plaza, with
+  // checkered billboards on tall posts against the terraces behind. The cheapest item
+  // is at the spawn (north) end.
+  // Swords stand in two staggered rows: the first ten on the ground in front, the rest
+  // (bigger and pricier) on a raised ledge behind, offset half a step so each sign
+  // sits in a gap of the row in front.
+  const L = LOBBY_HALF
+  const SWORD_STEP = 3.9
+  const FRONT_COUNT = 10
+  const LEDGE_H = 1.2
+  // Both rows are centred on the wall.
+  const frontStart = ((FRONT_COUNT - 1) * SWORD_STEP) / 2
+  const swordPads = SWORDS.map((sword, i) => {
+    const back = i >= FRONT_COUNT
+    const slot = back ? i - FRONT_COUNT : i
+    return {
+      sword,
+      position: back
+        ? [-(L - 2.4), LEDGE_H, frontStart - SWORD_STEP / 2 - slot * SWORD_STEP]
+        : [-(L - 6.8), 0, frontStart - slot * SWORD_STEP],
+    }
+  })
+  // The ledge is one easy jump high.
+  hill(-L, -frontStart - 2.5, -(L - 4.4), frontStart + 2.5, LEDGE_H)
+
+  // Training pads are turned to face -X, which puts each dummy (DUMMY_OFFSET_Z in the
+  // pad's own frame) on the wall side of its pad.
+  const TRAINER_STEP = 4.2
+  const trainerPads = TRAINERS.map((trainer, i) => ({
+    trainer,
+    position: [L - 5.2, 0, ((TRAINERS.length - 1) * TRAINER_STEP) / 2 - i * TRAINER_STEP],
+    rotationY: -Math.PI / 2,
+  }))
+
+  /**
+   * Checkered billboard on two tall black posts, standing against a side wall.
+   * `fx` is the x of its front face and `dir` the way it faces (+1 = +X, -1 = -X).
+   */
+  const sideBillboard = (fx, dir, cz, y0, w, h, material, text, fill) => {
+    /** x-range from `a` to `b` units behind the front face. */
+    const behind = (a, b) => {
+      const p = fx - dir * a
+      const q = fx - dir * b
+      return [Math.min(p, q), Math.max(p, q)]
+    }
+    const [bx0, bx1] = behind(0, 0.3)
+    const [fx0, fx1] = behind(0.3, 0.6)
+    const [px0, px1] = behind(0.6, 1.1)
+    for (const pz of [cz - w / 2 + 0.7, cz + w / 2 - 0.7]) {
+      box(px0, 0, pz - 0.3, px1, y0 + h, pz + 0.3, 'dark')
+    }
+    box(fx0, y0 - 0.3, cz - w / 2 - 0.3, fx1, y0 + h + 0.3, cz + w / 2 + 0.3, 'dark')
+    box(bx0, y0, cz - w / 2, bx1, y0 + h, cz + w / 2, material)
+    labels.push({
+      lines: [text],
+      position: [fx + dir * 0.02, y0 + h / 2, cz],
+      rotationY: (dir * Math.PI) / 2,
+      size: [w * 0.9, h * 0.8],
+      style: { fill },
+    })
+  }
+
+  // [centre z, is the big middle board]
+  // Raised clear of the back row's signs, which top out a little above y = 8.
+  const swordBoards = [[12, false], [0, true], [-12, false]]
+  for (const [cz, big] of swordBoards) {
+    sideBillboard(-(L - 0.6), 1, cz, big ? 9.2 : 8.4, big ? 11 : 9, big ? 4 : 3.5,
+      'floor:#3d7be8,#2f68d0', 'SWORDS', ['#ffffff', '#cfe6ff'])
+  }
+  const trainBoards = [[12, false], [0, true], [-12, false]]
+  for (const [cz, big] of trainBoards) {
+    sideBillboard(L - 0.6, -1, cz, big ? 8 : 7.2, big ? 11 : 9, big ? 4 : 3.5,
+      'floor:#ff9f1c,#f08a0a', 'TRAIN', ['#fff6a8', '#ffc21a'])
+  }
 
   // --- Terraces around the lobby --------------------------------------------------
   // Three rings: two low steps you can jump up, then a tall cliff that bounds the map.
@@ -272,12 +344,13 @@ export function buildLayout() {
   }
 
   const lastStage = [0, 2, stageStart(STAGE_COUNT) - 6]
-  arch(-41, 0, 'x')
-  portals.push({ position: [-41, 0, 0], rotationY: Math.PI / 2, target: lastStage })
+  // At the north end of the central path, behind the spawn, facing the gate.
+  arch(0, L - 3, 'z')
+  portals.push({ position: [0, 0, L - 3], rotationY: Math.PI, target: lastStage })
   labels.push({
     lines: ['LAST STAGE'],
-    position: [-39.95, 8.2, 0],
-    rotationY: Math.PI / 2,
+    position: [0, 8.2, L - 4.05],
+    rotationY: Math.PI,
     size: [8.4, 1],
     style: { fill: ['#f3dcff', '#c07bff'] },
   })
@@ -317,10 +390,11 @@ export function buildLayout() {
     })
   }
 
-  // --- Welcome board at the east end of the cross path -----------------------------
-  box(40.4, 0, -5.6, 41, 9, -4.8, 'trunk')
-  box(40.4, 0, 4.8, 41, 9, 5.6, 'trunk')
-  box(40.4, 2.6, -6, 41, 8.6, 6, 'trunk')
+  // --- Welcome board at the north end, beside the portal ---------------------------
+  // Posts sit behind the board so their faces don't fight with its front.
+  box(10.4, 0, L - 2.4, 11.2, 9, L - 1.8, 'trunk')
+  box(20.8, 0, L - 2.4, 21.6, 9, L - 1.8, 'trunk')
+  box(10, 2.6, L - 3, 22, 8.6, L - 2.4, 'trunk')
   labels.push({
     lines: [
       { text: 'WELCOME!', scale: 1.5, fill: ['#fff6a8', '#ffc21a'] },
@@ -329,11 +403,11 @@ export function buildLayout() {
       `to explore all ${STAGE_COUNT} stages`,
       { text: 'Purple portal = last stage', fill: '#e2b8ff' },
     ],
-    position: [40.36, 5.6, 0],
-    rotationY: -Math.PI / 2,
+    position: [16, 5.6, L - 3.04],
+    rotationY: Math.PI,
     size: [11.4, 5.6],
     style: { bg: '#6b4424', border: '#4a2c14' },
   })
 
-  return { blocks, walls, portals, pads, crowns, crystals, labels }
+  return { blocks, walls, portals, pads, crowns, crystals, labels, swordPads, trainerPads }
 }

@@ -1,4 +1,4 @@
-import { NearestFilter, Quaternion, Vector3 } from 'three'
+import { Box3, Matrix4, NearestFilter, Object3D, Quaternion, Vector3 } from 'three'
 
 import { BACK_BONE, HAT_BONE, NECK_OFFSET_BONE, PART_SLOTS } from '../bloxity/avatarAssets'
 
@@ -228,6 +228,74 @@ export function attachAccessory(rig, kind, object) {
   return object
 }
 
+/** Forearm bone that held items ride on. */
+const HAND_BONE = 'ArmR2'
+/** The base body's right-arm mesh (`default_arm_R`), used to find where the hand is. */
+const RIGHT_ARM_MESH = /arm_r$/i
+
+/**
+ * Adds an empty holder to the right forearm bone for a held item (the sword).
+ * Call `placeHandHolder` once the body parts are applied to move it into the palm.
+ */
+export function attachHandHolder(rig) {
+  const bone = rig.bones[HAND_BONE]?.bone
+  if (!bone) return null
+  const holder = new Object3D()
+  holder.name = 'HandHolder'
+  bone.add(holder)
+  return holder
+}
+
+const _rootInv = new Matrix4()
+const _boneInRoot = new Matrix4()
+const _handInRoot = new Matrix4()
+const _box = new Box3()
+const _size = new Vector3()
+const _center = new Vector3()
+
+/**
+ * Moves the hand holder to the bottom of the right arm, oriented to the character
+ * (so +Z is forward and +Y up while the arm hangs at rest).
+ *
+ * Measured in the rest pose, since bone axes aren't character-aligned (see
+ * collectRig): every bone is reset, the holder's pose is solved in character space,
+ * and the previous pose is restored.
+ */
+export function placeHandHolder(rig, holder) {
+  const bone = holder.parent
+  const arm = rig.skinnedMeshes.find((m) => RIGHT_ARM_MESH.test(m.name || ''))
+  if (!bone || !arm || !rig.skeleton) return
+
+  const bones = rig.skeleton.bones
+  const saved = bones.map((b) => [b.position.clone(), b.quaternion.clone(), b.scale.clone()])
+  for (const b of bones) {
+    const rest = rig.bones[b.name]
+    b.position.copy(rest.origPos)
+    b.quaternion.copy(rest.origQuat)
+    b.scale.copy(rest.origScale)
+  }
+  rig.root.updateMatrixWorld(true)
+
+  // Arm bounds in character space; the palm is just above its lowest point.
+  _rootInv.copy(rig.root.matrixWorld).invert()
+  arm.geometry.computeBoundingBox()
+  _box.copy(arm.geometry.boundingBox).applyMatrix4(arm.matrixWorld).applyMatrix4(_rootInv)
+  _box.getSize(_size)
+  _box.getCenter(_center)
+  _handInRoot.makeTranslation(_center.x, _box.min.y + _size.y * 0.1, _center.z)
+
+  // holder = bone⁻¹ · hand, all in character space.
+  _boneInRoot.multiplyMatrices(_rootInv, bone.matrixWorld)
+  _boneInRoot.invert().multiply(_handInRoot).decompose(holder.position, holder.quaternion, holder.scale)
+
+  bones.forEach((b, i) => {
+    b.position.copy(saved[i][0])
+    b.quaternion.copy(saved[i][1])
+    b.scale.copy(saved[i][2])
+  })
+  rig.root.updateMatrixWorld(true)
+}
+
 /**
  * Applies Bloxity body proportions.
  *
@@ -328,13 +396,40 @@ const sway = (rig, name, angle) => rotateBone(rig, name, 'axisZ', angle)
  * Poses the rig for the current motion state.
  *
  * @param {object} rig from `collectRig`
- * @param {{ time: number, speed: number, grounded: boolean, maxSpeed: number }} motion
+ * @param {{ time: number, speed: number, grounded: boolean, maxSpeed: number, swing?: number }} motion
  *   `speed` is horizontal speed in world units/sec; `maxSpeed` is what counts as a
  *   full-amplitude run, so the cycle scales smoothly from a walk to a sprint.
+ *   `swing` is sword-swing progress: 0..1 while a swing plays, anything else when idle.
  */
 export function animateRig(rig, motion) {
   if (!rig?.skeleton || !motion) return
+  poseLocomotion(rig, motion)
+  poseSword(rig, motion.swing)
+}
 
+/** Sword arm raised slightly forward, so the blade is held out in front. */
+const HOLD_ANGLE = -0.45
+/** Extra raise at the top of the wind-up (negative swings the arm up and forward). */
+const WINDUP_ANGLE = -2.7
+const WINDUP_PORTION = 0.3
+
+/** Holds the sword out, and layers the overhead chop on top while a swing plays. */
+function poseSword(rig, progress = Infinity) {
+  let angle = HOLD_ANGLE
+  if (progress >= 0 && progress < 1) {
+    if (progress < WINDUP_PORTION) {
+      const t = progress / WINDUP_PORTION
+      angle += WINDUP_ANGLE * (1 - (1 - t) * (1 - t))
+    } else {
+      // Chop down past the hold (the sine overshoot), settling back on it at t = 1.
+      const t = (progress - WINDUP_PORTION) / (1 - WINDUP_PORTION)
+      angle += WINDUP_ANGLE * (1 - t) ** 2 + 0.6 * Math.sin(Math.PI * t)
+    }
+  }
+  swing(rig, 'ArmR1', angle)
+}
+
+function poseLocomotion(rig, motion) {
   const { time = 0, speed = 0, grounded = true, maxSpeed = 6 } = motion
   const ratio = Math.min(speed / Math.max(maxSpeed, 0.001), 1)
 

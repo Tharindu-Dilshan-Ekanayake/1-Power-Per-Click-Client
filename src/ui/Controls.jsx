@@ -4,6 +4,7 @@ export function Controls() {
     ['W A S D', 'move'],
     ['Space', 'jump'],
     ['Shift', 'sprint'],
+    ['Left-click', 'swing sword'],
     ['Right-drag', 'rotate camera'],
     ['Scroll', 'zoom'],
   ]

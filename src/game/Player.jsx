@@ -3,6 +3,7 @@ import { CapsuleCollider, RigidBody, useRapier } from '@react-three/rapier'
 import { useRef } from 'react'
 import { Quaternion, Vector3 } from 'three'
 
+import { useGame } from './gameStore'
 import PlayerAvatar from './PlayerAvatar'
 import useKeyboard from './useKeyboard'
 
@@ -20,6 +21,8 @@ const SPRINT_MULTIPLIER = 1.6
  * enough to hop onto the 1.2-unit terrace steps.
  */
 const JUMP_VELOCITY = 7.6
+/** Length of one sword swing animation. */
+const SWING_DURATION_S = 0.35
 /** Falling below this puts the player back at their spawn point. */
 const FALL_LIMIT_Y = -25
 /** Extra ray length past the capsule bottom; tolerates small ground gaps. */
@@ -147,6 +150,13 @@ export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalB
     } else {
       // Damp horizontal motion to a stop; don't touch the fall speed.
       body.setLinvel({ x: linvel.x * 0.8, y: linvel.y, z: linvel.z * 0.8 }, true)
+
+      // Training: turn to face the dummy.
+      const game = useGame.getState()
+      if (visualRef.current && game.activeTrainer) {
+        _targetQuat.setFromAxisAngle(_up, game.trainYaw)
+        visualRef.current.quaternion.slerp(_targetQuat, 1 - Math.pow(0.001, delta))
+      }
     }
 
     // --- Jump --------------------------------------------------------------------
@@ -168,6 +178,7 @@ export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalB
     motion.speed = Math.hypot(nowVel.x, nowVel.z)
     motion.grounded = grounded
     motion.maxSpeed = MOVE_SPEED * (k.sprint ? SPRINT_MULTIPLIER : 1)
+    motion.swing = (performance.now() / 1000 - useGame.getState().swingAt) / SWING_DURATION_S
   })
 
   return (

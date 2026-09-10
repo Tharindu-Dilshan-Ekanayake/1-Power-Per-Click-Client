@@ -6,7 +6,7 @@
  */
 
 /** Half-size of the flat lobby plaza. */
-export const LOBBY_HALF = 44
+export const LOBBY_HALF = 34
 /** Depth of each terrace ring around the lobby. */
 export const RING = 6
 
@@ -21,13 +21,14 @@ export const WALL_H = 12
 export const OPEN_HALF = 8
 export const OPEN_H = 10
 
-/** Z of the gate tower's front face; wall 1 lives here. */
-export const GATE_Z = -44
+/** Z of the gate tower's front face (the lobby's south edge); wall 1 lives here. */
+export const GATE_Z = -LOBBY_HALF
 /** Z where stage 1's corridor begins (the back of the gate tower). */
-export const STAGE_START = -50
+export const STAGE_START = GATE_Z - 6
 export const STAGE_LEN = 44
 
-export const SPAWN = [0, 2, 30]
+/** Near the north end of the central path, facing the gate. */
+export const SPAWN = [0, 2, LOBBY_HALF - 12]
 
 /** Cyan used for every stage-wall frame. */
 export const FRAME_COLOR = '#6ff7ff'

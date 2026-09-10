@@ -1,5 +1,7 @@
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace } from 'three'
 
+import { formatNumber } from '../format'
+
 /**
  * Procedural canvas textures. Everything is drawn at runtime, so the map ships with
  * no image assets, and each texture is generated once and shared.
@@ -334,9 +336,6 @@ export function wallTexture(id, def) {
   })
 }
 
-const formatNumber = (n) =>
-  n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${(n / 1e3).toFixed(1)}K` : String(n)
-
 /** Big wall number plus a full green health bar, laid over the wall surface. */
 export function wallOverlayTexture(number, hp) {
   return cached(`overlay:${number}:${hp}`, () => {
@@ -455,6 +454,22 @@ export function radialGlowTexture() {
   })
 }
 
+/** Red-and-white bullseye on a transparent background, for training dummies. */
+export function targetTexture() {
+  return cached('target', () => {
+    const s = 256
+    const [canvas, ctx] = makeCanvas(s, s)
+    const rings = ['#e8392d', '#ffffff', '#e8392d', '#ffffff', '#e8392d']
+    rings.forEach((color, i) => disc(ctx, s / 2, s / 2, s * 0.48 * (1 - i / rings.length), color))
+    ctx.lineWidth = 6
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)'
+    ctx.beginPath()
+    ctx.arc(s / 2, s / 2, s * 0.48, 0, Math.PI * 2)
+    ctx.stroke()
+    return finish(canvas, { repeat: false })
+  })
+}
+
 /** Vertical fade for light beams: opaque at the bottom, clear at the top. */
 export function beamTexture() {
   return cached('beam', () => {
@@ -483,15 +498,86 @@ export function skyTexture() {
   })
 }
 
+/** Small outlined icon in an `s`-sized square at (x, y): 'trophy' or 'sword'. */
+function drawIcon(ctx, kind, x, y, s) {
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.scale(s / 100, s / 100)
+  ctx.lineJoin = 'round'
+  const outline = '#2a1a00'
+
+  if (kind === 'trophy') {
+    // Handles: a thick dark stroke with a thinner gold one on top.
+    ctx.beginPath()
+    ctx.arc(18, 30, 13, Math.PI * 0.5, Math.PI * 1.5)
+    ctx.moveTo(82, 17)
+    ctx.arc(82, 30, 13, -Math.PI * 0.5, Math.PI * 0.5)
+    ctx.lineWidth = 16
+    ctx.strokeStyle = outline
+    ctx.stroke()
+    ctx.lineWidth = 7
+    ctx.strokeStyle = '#ffd23f'
+    ctx.stroke()
+
+    const gold = ctx.createLinearGradient(0, 0, 0, 100)
+    gold.addColorStop(0, '#fff3a0')
+    gold.addColorStop(1, '#f0a800')
+    ctx.beginPath()
+    ctx.moveTo(18, 8)
+    ctx.lineTo(82, 8)
+    ctx.lineTo(76, 44)
+    ctx.quadraticCurveTo(50, 66, 24, 44)
+    ctx.closePath()
+    ctx.rect(43, 58, 14, 18)
+    ctx.rect(26, 76, 48, 16)
+    ctx.lineWidth = 8
+    ctx.strokeStyle = outline
+    ctx.stroke()
+    ctx.fillStyle = gold
+    ctx.fill()
+  } else if (kind === 'sword') {
+    ctx.translate(50, 50)
+    ctx.rotate(Math.PI / 4)
+    ctx.lineWidth = 8
+    ctx.strokeStyle = outline
+    ctx.beginPath()
+    ctx.moveTo(0, -48)
+    ctx.lineTo(9, -36)
+    ctx.lineTo(9, 14)
+    ctx.lineTo(-9, 14)
+    ctx.lineTo(-9, -36)
+    ctx.closePath()
+    ctx.stroke()
+    ctx.fillStyle = '#e6ecf5'
+    ctx.fill()
+    ctx.beginPath()
+    ctx.rect(-22, 14, 44, 10)
+    ctx.rect(-6, 24, 12, 18)
+    ctx.stroke()
+    ctx.fillStyle = '#ffc93c'
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
 /**
- * Text sign. `lines` are strings or `{ text, scale, fill }`; `fill` may be a list of
- * colours for a vertical gradient.
+ * Text sign. `lines` are strings or `{ text, scale, fill, icon }`; `fill` may be a
+ * list of colours for a vertical gradient, and `icon` ('trophy' | 'sword') is drawn
+ * before the text.
  */
-export function labelTexture({ lines, aspect, fill = '#ffffff', stroke = '#1b1b25', bg = null, border = null }) {
-  const key = `label:${JSON.stringify([lines, aspect, fill, stroke, bg, border])}`
+export function labelTexture({
+  lines,
+  aspect,
+  fill = '#ffffff',
+  stroke = '#1b1b25',
+  bg = null,
+  border = null,
+  width = 1024,
+}) {
+  const key = `label:${JSON.stringify([lines, aspect, fill, stroke, bg, border, width])}`
   return cached(key, () => {
-    const w = 1024
-    const h = Math.max(64, Math.round(w / aspect))
+    const w = width
+    const h = Math.max(32, Math.round(w / aspect))
     const [canvas, ctx] = makeCanvas(w, h)
     const short = Math.min(w, h)
     const pad = short * 0.1
@@ -522,17 +608,23 @@ export function labelTexture({ lines, aspect, fill = '#ffffff', stroke = '#1b1b2
       const lineH = unit * (item.scale ?? 1)
       let size = lineH * 0.78
       ctx.font = `900 ${size}px ${FONT}`
-      const measured = ctx.measureText(item.text).width
+      // An icon is drawn one text-height square, plus a small gap, left of the text.
+      const iconRatio = item.icon ? 1.15 : 0
+      const measured = ctx.measureText(item.text).width + size * iconRatio
       const maxW = w - pad * 2
       if (measured > maxW) {
         size *= maxW / measured
         ctx.font = `900 ${size}px ${FONT}`
       }
+      const iconW = size * iconRatio
+      const x = (w - ctx.measureText(item.text).width - iconW) / 2 + iconW
       const cy = y + lineH / 2
+      if (item.icon) drawIcon(ctx, item.icon, x - iconW, cy - size * 0.55, size)
+      ctx.textAlign = 'left'
       if (stroke) {
         ctx.lineWidth = size * 0.2
         ctx.strokeStyle = stroke
-        ctx.strokeText(item.text, w / 2, cy)
+        ctx.strokeText(item.text, x, cy)
       }
       const color = item.fill ?? fill
       if (Array.isArray(color)) {
@@ -542,7 +634,7 @@ export function labelTexture({ lines, aspect, fill = '#ffffff', stroke = '#1b1b2
       } else {
         ctx.fillStyle = color
       }
-      ctx.fillText(item.text, w / 2, cy)
+      ctx.fillText(item.text, x, cy)
       y += lineH
     }
     return finish(canvas, { repeat: false })
