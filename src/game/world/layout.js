@@ -89,7 +89,8 @@ export function buildLayout() {
 
   // Walkways: the main avenue from the north plaza to the gate (and on through its
   // tunnel), the plaza itself, and a cross path between the training and egg zones.
-  const AVENUE = 5
+  // Half-width of the avenue: as wide as the gate's doorway (OPEN_HALF).
+  const AVENUE = OPEN_HALF
   const K = AVENUE + 0.5
   const PLAZA_Z = L - 10
   const CROSS0 = -5
@@ -97,8 +98,14 @@ export function buildLayout() {
   path(-AVENUE, STAGE_START, AVENUE, PLAZA_Z)
   path(-L, PLAZA_Z, L, L)
   path(AVENUE, CROSS0, L, CROSS1)
-  kerb(-K, GATE_Z, -AVENUE, PLAZA_Z)
-  kerb(AVENUE, GATE_Z, K, CROSS0)
+  // A forecourt in front of the gate, as wide as the tower, between the zones' south
+  // fences. The avenue's kerbs start where it ends.
+  const FORECOURT = 4
+  const towerHalf = CORRIDOR_HALF + WALL_T
+  path(-towerHalf, GATE_Z, -AVENUE, GATE_Z + FORECOURT)
+  path(AVENUE, GATE_Z, towerHalf, GATE_Z + FORECOURT)
+  kerb(-K, GATE_Z + FORECOURT, -AVENUE, PLAZA_Z)
+  kerb(AVENUE, GATE_Z + FORECOURT, K, CROSS0)
   kerb(AVENUE, CROSS1, K, PLAZA_Z)
   kerb(K, CROSS0 - 0.5, L, CROSS0)
   kerb(K, CROSS1, L, CROSS1 + 0.5)
@@ -166,20 +173,22 @@ export function buildLayout() {
     })
   }
 
-  // Each zone has its own colours: floor, fence, arch and billboards.
+  // Each zone has its own colours: floor, fence, arch and billboards. Zones start a
+  // grass verge (with the lamp posts) away from the avenue.
+  const ZONE_IN = AVENUE + 2
   const ZONES = {
     swords: {
-      x0: -L + 1, x1: -7, z0: GATE_Z + 4, z1: PLAZA_Z - 2,
+      x0: -L + 1, x1: -ZONE_IN, z0: GATE_Z + FORECOURT, z1: PLAZA_Z - 2,
       floor: 'floor:#9cc2ff,#86b1f7', rail: 'floor:#3d7be8,#3d7be8', post: 'floor:#23479a,#23479a',
       board: 'floor:#3d7be8,#2f68d0', neon: '#6fb8ff', title: 'SWORDS', fill: ['#ffffff', '#cfe6ff'],
     },
     train: {
-      x0: 7, x1: L - 1, z0: CROSS1 + 2, z1: PLAZA_Z - 2,
+      x0: ZONE_IN, x1: L - 1, z0: CROSS1 + 2, z1: PLAZA_Z - 2,
       floor: 'floor:#ffd494,#ffc477', rail: 'floor:#ff9f1c,#ff9f1c', post: 'floor:#a85a00,#a85a00',
       board: 'floor:#ff9f1c,#f08a0a', neon: '#ffd166', title: 'TRAIN', fill: ['#fff6a8', '#ffc21a'],
     },
     eggs: {
-      x0: 7, x1: L - 1, z0: GATE_Z + 4, z1: CROSS0 - 2,
+      x0: ZONE_IN, x1: L - 1, z0: GATE_Z + FORECOURT, z1: CROSS0 - 2,
       floor: 'floor:#ffc2e6,#ffadd9', rail: 'floor:#ff5fb8,#ff5fb8', post: 'floor:#a8286e,#a8286e',
       board: 'floor:#ff5fb8,#e64aa0', neon: '#ff8fd0', title: 'EGGS', fill: ['#ffffff', '#ffd6ee'],
     },
@@ -229,7 +238,8 @@ export function buildLayout() {
   // The ledge is one easy jump high.
   hill(-L, SWORD_Z - rowHalf - 2.5, -(L - 4.4), SWORD_Z + rowHalf + 2.5, LEDGE_H)
 
-  const STATUE_X = -17
+  // Between the zone's entrance and the front row of swords.
+  const STATUE_X = -18.5
   box(STATUE_X - 2, 0, SWORD_Z - 2, STATUE_X + 2, 1.2, SWORD_Z + 2, 'portalStone')
   box(STATUE_X - 1.2, 1.2, SWORD_Z - 1.2, STATUE_X + 1.2, 1.8, SWORD_Z + 1.2, 'portalStone')
   const statue = { position: [STATUE_X, 1.8, SWORD_Z], swordId: 'diamond' }
