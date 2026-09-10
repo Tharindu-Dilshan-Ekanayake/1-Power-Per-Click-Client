@@ -5,6 +5,7 @@ import { Quaternion, Vector3 } from 'three'
 
 import { useGame } from './gameStore'
 import PlayerAvatar from './PlayerAvatar'
+import { WALK_SPEED } from './progression'
 import useKeyboard from './useKeyboard'
 
 // Capsule roughly matching the humanoid. Rapier's capsule args are the half-height of
@@ -13,7 +14,8 @@ const CAPSULE_RADIUS = 0.35
 const CAPSULE_HALF_HEIGHT = 0.55
 const PLAYER_HEIGHT = 2 * (CAPSULE_HALF_HEIGHT + CAPSULE_RADIUS)
 
-const MOVE_SPEED = 6
+/** World units per second; the HUD shows it as WALK_SPEED (16 → 6). */
+const MOVE_SPEED = WALK_SPEED * (6 / 16)
 const SPRINT_MULTIPLIER = 1.6
 /**
  * Upward speed set on jump. Set directly rather than applied as an impulse so the
@@ -151,10 +153,15 @@ export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalB
       // Damp horizontal motion to a stop; don't touch the fall speed.
       body.setLinvel({ x: linvel.x * 0.8, y: linvel.y, z: linvel.z * 0.8 }, true)
 
-      // Training: turn to face the dummy.
+      // Training: turn to face the dummy. Beside a stage wall: turn to face the wall.
       const game = useGame.getState()
-      if (visualRef.current && game.activeTrainer) {
-        _targetQuat.setFromAxisAngle(_up, game.trainYaw)
+      if (visualRef.current && (game.activeTrainer || game.nearWall)) {
+        const yaw = game.activeTrainer
+          ? game.trainYaw
+          : body.translation().z > game.nearWall.z
+            ? Math.PI
+            : 0
+        _targetQuat.setFromAxisAngle(_up, yaw)
         visualRef.current.quaternion.slerp(_targetQuat, 1 - Math.pow(0.001, delta))
       }
     }

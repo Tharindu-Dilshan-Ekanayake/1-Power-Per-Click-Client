@@ -1,8 +1,11 @@
 import { EGGS } from '../eggs'
 import { SWORDS } from '../swords'
 import { TRAINERS } from '../trainers'
+import { WALLS_PER_STAGE, wallStage, WIN_PADS } from '../walls'
 import { mulberry32 } from './textures'
 import {
+  cabinEnd,
+  cabinStart,
   CORRIDOR_HALF,
   END_Z,
   GATE_Z,
@@ -16,13 +19,14 @@ import {
   STAGE_START,
   stageStart,
   THEMES,
+  TUNNEL_LEAD,
+  WALL_GAP,
   WALL_H,
   WALL_T,
-  wallHp,
 } from './themes'
 
-/** Stage 1's two VIP rooms, centred halfway down the corridor. */
-const VIP_Z = stageStart(1) - STAGE_LEN / 2
+/** The two small rooms off either side of every stage's cabin, and their doors' half-width. */
+const VIP_DOOR = 5
 const VIP_ROOMS = [
   { side: 1, title: 'SUPER VIP', floor: ['#b57cff', '#9d5cf0'], wall: '#7a4cc8', neon: '#d59bff', pad: '#4fd8ff' },
   { side: -1, title: 'VIP ZONE', floor: ['#ffb347', '#f59b25'], wall: '#c07a2a', neon: '#ffd166', pad: '#ffe14a' },
@@ -52,6 +56,53 @@ export function buildLayout() {
   const crowns = []
   const crystals = []
   const labels = []
+  const winPads = []
+  /** Rectangles `{ x0, x1, z0, z1, y }` with a ceiling over them (see Roofs). */
+  const roofs = []
+
+  /** Win pads in the corners in front of a wall face at `zFront`, paying out for wall `number`. */
+  const addPads = (number, zFront) => {
+    for (const pad of WIN_PADS) winPads.push({ number, pad, position: [pad.side * 9.9, 0, zFront + 2] })
+  }
+  /** Stage wall `number` with its front face at `zFront`. */
+  const addWall = (number, zFront) => {
+    const stage = wallStage(number)
+    walls.push({ number, stage, theme: THEMES[stage - 1], zFront })
+  }
+  /** Dark frame across a stage corridor centred on `z`, around the doorway a wall fills. */
+  const divider = (z) => {
+    box(-CORRIDOR_HALF, -1, z - 1, -OPEN_HALF, WALL_H, z + 1, 'dark')
+    box(OPEN_HALF, -1, z - 1, CORRIDOR_HALF, WALL_H, z + 1, 'dark')
+    box(-OPEN_HALF, OPEN_H, z - 1, OPEN_HALF, WALL_H, z + 1, 'dark')
+  }
+  /** The two small rooms opening off either side of a cabin, centred on `vipZ`. */
+  const sideRooms = (vipZ) => {
+    for (const room of VIP_ROOMS) {
+      const s = room.side
+      const [x0, x1] = s > 0 ? [CORRIDOR_HALF + WALL_T, 26] : [-26, -CORRIDOR_HALF - WALL_T]
+      const [bx0, bx1] = s > 0 ? [26, 27] : [-27, -26]
+      const za = vipZ - 7
+      const zb = vipZ + 7
+      box(x0, -1, za, x1, 0, zb, `floor:${room.floor.join(',')}`)
+      box(bx0, -1, za - 1, bx1, 10, zb + 1, `panel:${room.wall}`)
+      box(Math.min(x0, x1), -1, za - 1, Math.max(x0, x1), 10, za, `panel:${room.wall}`)
+      box(Math.min(x0, x1), -1, zb, Math.max(x0, x1), 10, zb + 1, `panel:${room.wall}`)
+      const nx = s > 0 ? [bx0 - 0.12, bx0] : [bx1, bx1 + 0.12]
+      box(nx[0], 0, za, nx[1], 0.25, zb, `neon:${room.neon}`, false)
+      box(nx[0], 9.4, za, nx[1], 9.6, zb, `neon:${room.neon}`, false)
+      roofs.push({ x0: Math.min(x0, bx0), x1: Math.max(x1, bx1), z0: za - 1, z1: zb + 1, y: 9.99 })
+
+      pads.push({ position: [s * 20, 0, vipZ], color: room.pad })
+      crowns.push({ position: [s * 20, 4.2, vipZ] })
+      labels.push({
+        lines: [room.title],
+        position: [s * 25.9, 7.2, vipZ],
+        rotationY: -s * (Math.PI / 2),
+        size: [10, 2],
+        style: { fill: ['#ffffff', room.neon] },
+      })
+    }
+  }
 
   const box = (x0, y0, z0, x1, y1, z1, m, c = true) => {
     blocks.push({
@@ -361,7 +412,8 @@ export function buildLayout() {
   box(-12, 14, GZ0 + 1, 12, 16, GZ1 - 1, 'dark')
   box(-9, 16, GZ0 + 1.5, 9, 18, GZ1 - 1.5, 'dark')
   box(-6, 18, GZ0 + 2, 6, 20, GZ1 - 2, 'dark')
-  walls.push({ number: 1, theme: THEMES[0], zFront: GATE_Z, hp: wallHp(1) })
+  // The first of stage 1's ten walls. No Win pads out here: they're in the cabins.
+  addWall(1, GATE_Z)
   labels.push({
     lines: ['STAGE 1'],
     position: [0, 12, GATE_Z + 0.12],
@@ -375,7 +427,9 @@ export function buildLayout() {
     const theme = THEMES[k - 1]
     const z0 = stageStart(k)
     const z1 = z0 - STAGE_LEN
-    const opening = k === 1 ? [VIP_Z - 5, VIP_Z + 5] : null
+    // Doors in both side walls, halfway along the cabin, into its two small rooms.
+    const vipZ = (cabinStart(k) + cabinEnd(k)) / 2
+    const opening = [vipZ - VIP_DOOR, vipZ + VIP_DOOR]
 
     /** Calls fn(za, zb) for the stretches of this stage's side wall not cut by a door. */
     const alongWall = (fn) => {
@@ -399,22 +453,13 @@ export function buildLayout() {
       if (opening) box(xa, 8, opening[0], xb, WALL_H, opening[1], `panel:${theme.side}`)
       box(xa - 0.2, WALL_H, z1, xb + 0.2, WALL_H + 0.6, z0, 'dark')
 
-      // Pillars every 11 units, skipping any doorway.
-      for (let z = z0 - 5.5; z > z1; z -= 11) {
-        if (opening && z > opening[0] - 1 && z < opening[1] + 1) continue
-        const [pa, pb] = side < 0 ? [xin, xin + 0.8] : [xin - 0.8, xin]
-        box(pa, 0, z - 0.8, pb, WALL_H, z + 0.8, 'dark')
-      }
-
       // Terrain beyond the corridor walls, so it reads as a canyon from above.
       const [hx0, hx1] = side < 0 ? [-26, -14] : [14, 26]
       const hillTop = Math.min(z0, -(LOBBY_HALF + RING * 3))
-      const ranges = opening
-        ? [
-            [z1, VIP_Z - 8],
-            [VIP_Z + 8, hillTop],
-          ]
-        : [[z1, hillTop]]
+      const ranges = [
+        [z1, vipZ - 8],
+        [vipZ + 8, hillTop],
+      ]
       for (const [ra, rb] of ranges) {
         for (const [a, b] of segments(ra, rb)) {
           const h = pick([13, 14, 15, 16, 17])
@@ -423,18 +468,31 @@ export function buildLayout() {
         }
       }
 
-      crystals.push({ position: [side * (CH - 2), 0, z0 - 3], color: theme.neon, scale: 0.9 })
+      crystals.push({ position: [side * (CH - 2), 0, cabinStart(k) - 3], color: theme.neon, scale: 0.9 })
     }
 
+    // A ceiling over it all. The tunnel: the stage's first wall sits in the gate it's
+    // entered through, and the other nine follow straight after, one every WALL_GAP.
+    roofs.push({ x0: -CH, x1: CH, z0: z1, z1: z0, y: WALL_H - 0.01 })
+    for (let j = 1; j < WALLS_PER_STAGE; j++) {
+      const front = z0 - TUNNEL_LEAD - (j - 1) * WALL_GAP
+      divider(front - 1)
+      addWall((k - 1) * WALLS_PER_STAGE + 1 + j, front)
+    }
+
+    // Past the tenth wall: the cabin, with a small room either side.
+    sideRooms(vipZ)
+
     if (k < STAGE_COUNT) {
-      // Divider holding the next stage's wall.
-      box(-CH, -1, z1 - 1, -OPEN_HALF, WALL_H, z1 + 1, 'dark')
-      box(OPEN_HALF, -1, z1 - 1, CH, WALL_H, z1 + 1, 'dark')
-      box(-OPEN_HALF, OPEN_H, z1 - 1, OPEN_HALF, WALL_H, z1 + 1, 'dark')
-      walls.push({ number: k + 1, theme: THEMES[k], zFront: z1 + 1, hp: wallHp(k + 1) })
+      // The next stage's gate closes the far end of the cabin; in front of it, the
+      // Win pads for cashing in this stage's walls.
+      const gateFront = cabinEnd(k)
+      divider(gateFront - 1)
+      addWall(k * WALLS_PER_STAGE + 1, gateFront)
+      addPads(k * WALLS_PER_STAGE + 1, gateFront)
       labels.push({
         lines: [`STAGE ${k + 1}`],
-        position: [0, 11, z1 + 1.12],
+        position: [0, 11, gateFront + 0.12],
         size: [9, 1.6],
         style: { fill: ['#fff6a8', '#ffc21a'] },
       })
@@ -443,6 +501,8 @@ export function buildLayout() {
 
   // --- The end of the line ----------------------------------------------------------
   box(-CH - WALL_T, -1, END_Z - 2, CH + WALL_T, WALL_H, END_Z, 'dark')
+  // One last pair of Win pads, for clearing every wall.
+  addPads(STAGE_COUNT * WALLS_PER_STAGE + 1, END_Z)
   for (const [a, b] of segments(-26, 26)) hill(a, END_Z - 14, b, END_Z - 2, pick([14, 15, 16]))
   labels.push({
     lines: ['MORE STAGES', 'COMING SOON'],
@@ -465,10 +525,13 @@ export function buildLayout() {
     place(3, 5.6, 0, 1.4, -1.4, 1.4)
   }
 
-  const lastStage = [0, 2, stageStart(STAGE_COUNT) - 6]
+  // Lands in the last stage's cabin.
+  const lastStage = [0, 2, cabinStart(STAGE_COUNT) - 6]
   // At the north end of the central path, behind the spawn, facing the gate.
   arch(0, L - 3, 'z')
-  portals.push({ position: [0, 0, L - 3], rotationY: Math.PI, target: lastStage })
+  // Only opens once you've broken your way into the last stage yourself.
+  const lastStageWall = STAGE_COUNT * WALLS_PER_STAGE
+  portals.push({ position: [0, 0, L - 3], rotationY: Math.PI, target: lastStage, requiresWall: lastStageWall })
   labels.push({
     lines: ['LAST STAGE'],
     position: [0, 8.2, L - 4.05],
@@ -486,32 +549,6 @@ export function buildLayout() {
     style: { fill: ['#f3dcff', '#c07bff'] },
   })
 
-  // --- VIP rooms (stage 1) ----------------------------------------------------------
-  for (const room of VIP_ROOMS) {
-    const s = room.side
-    const [x0, x1] = s > 0 ? [CH + WALL_T, 26] : [-26, -CH - WALL_T]
-    const [bx0, bx1] = s > 0 ? [26, 27] : [-27, -26]
-    const za = VIP_Z - 7
-    const zb = VIP_Z + 7
-    box(x0, -1, za, x1, 0, zb, `floor:${room.floor.join(',')}`)
-    box(bx0, -1, za - 1, bx1, 10, zb + 1, `panel:${room.wall}`)
-    box(Math.min(x0, x1), -1, za - 1, Math.max(x0, x1), 10, za, `panel:${room.wall}`)
-    box(Math.min(x0, x1), -1, zb, Math.max(x0, x1), 10, zb + 1, `panel:${room.wall}`)
-    const nx = s > 0 ? [bx0 - 0.12, bx0] : [bx1, bx1 + 0.12]
-    box(nx[0], 0, za, nx[1], 0.25, zb, `neon:${room.neon}`, false)
-    box(nx[0], 9.4, za, nx[1], 9.6, zb, `neon:${room.neon}`, false)
-
-    pads.push({ position: [s * 20, 0, VIP_Z], color: room.pad })
-    crowns.push({ position: [s * 20, 4.2, VIP_Z] })
-    labels.push({
-      lines: [room.title],
-      position: [s * 25.9, 7.2, VIP_Z],
-      rotationY: -s * (Math.PI / 2),
-      size: [10, 2],
-      style: { fill: ['#ffffff', room.neon] },
-    })
-  }
-
   // --- Welcome board at the north end, beside the portal ---------------------------
   // Posts sit behind the board so their faces don't fight with its front.
   box(10.4, 0, L - 2.4, 11.2, 9, L - 1.8, 'trunk')
@@ -521,9 +558,9 @@ export function buildLayout() {
     lines: [
       { text: 'WELCOME!', scale: 1.5, fill: ['#fff6a8', '#ffc21a'] },
       'WASD run  -  Shift sprint  -  Space jump',
-      'Walk through the glowing walls',
-      `to explore all ${STAGE_COUNT} stages`,
-      { text: 'Purple portal = last stage', fill: '#e2b8ff' },
+      `Break ${WALLS_PER_STAGE} walls with your sword to enter a stage`,
+      'Hold E on a Win pad to cash in',
+      { text: `Purple portal = last stage (after wall ${lastStageWall})`, fill: '#e2b8ff' },
     ],
     position: [16, 5.6, L - 3.04],
     rotationY: Math.PI,
@@ -534,6 +571,8 @@ export function buildLayout() {
   return {
     blocks,
     walls,
+    winPads,
+    roofs,
     portals,
     pads,
     crowns,

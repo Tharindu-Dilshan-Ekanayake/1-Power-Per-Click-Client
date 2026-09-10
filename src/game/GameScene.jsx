@@ -66,7 +66,7 @@ export function GameScene() {
       <Suspense fallback={null}>
         <Environment preset="city" environmentIntensity={0.35} />
         <Physics gravity={[0, -18, 0]}>
-          <World />
+          <World bodyRef={playerBodyRef} />
           <Player
             bodyRef={playerBodyRef}
             position={SPAWN}

@@ -3,15 +3,18 @@ import { persist } from 'zustand/middleware'
 
 import { getEgg } from './eggs'
 import { formatNumber } from './format'
+import { activeBoost, AUTO_CLICKERS, BOOST_S, BOOSTS, levelFor, levelMultiplier } from './progression'
 import { DEFAULT_SWORD, getSword } from './swords'
 import { getTrainer, TRAINERS } from './trainers'
-
-/** Wins for breaking stage wall `number`. */
-export const wallReward = (number) => number * number + 1
+import { padPower, padWins, WALLS_PER_STAGE, wallStage } from './walls'
 
 /** Power for one click. Kept a whole number so the totals stay tidy. */
-export const clickGain = (sword, trainer) =>
-  Math.max(1, Math.round(sword.power * (trainer?.multiplier ?? 1)))
+export const clickGain = (sword, trainer, multiplier = 1) =>
+  Math.max(1, Math.round(sword.power * (trainer?.multiplier ?? 1) * multiplier))
+
+/** Level times any running boost: everything that multiplies a click, bar training. */
+export const powerMultiplier = ({ power, boost }, now = Date.now()) =>
+  levelMultiplier(levelFor(power)) * (activeBoost(boost, now)?.multiplier ?? 1)
 
 const MESSAGE_MS = 2600
 /** Matches the `click-popup` animation in index.css. */
@@ -33,13 +36,29 @@ export const useGame = create(
       owned: [DEFAULT_SWORD],
       equipped: DEFAULT_SWORD,
       unlockedTrainers: [TRAINERS[0].id],
+      /** Highest stage wall ever broken (0 = none). */
+      bestWall: 0,
+      /** Running power boost: `{ multiplier, until }` (until in ms), or null. */
+      boost: null,
+      /** Whether the OP Auto Clicker has been bought. */
+      opAutoOwned: false,
 
       /** Id of the training dummy whose pad the player is standing on, or null. */
       activeTrainer: null,
       /** Yaw the player turns to while training, so they face the dummy. */
       trainYaw: Math.PI,
-      /** What the E key acts on: `{ kind: 'sword' | 'egg', id }`, or null. */
+      /** What the E key acts on: `{ kind: 'sword' | 'egg' | 'pad', id }`, or null. */
       interact: null,
+      /** `performance.now()` seconds when E started being held, or null. */
+      holdingSince: null,
+      /** The stage wall within sword reach: `{ number, z }` (z of its centre), or null. */
+      nearWall: null,
+      /** Walls broken this run, `{ [number]: true }`; cleared back in the lobby. */
+      brokenWalls: {},
+      /** Which auto clicker is running: 'off' | 'normal' | 'op'. */
+      autoClick: 'off',
+      /** Player position `[x, y, z]` at the last swing, so a wall knows which side was hit. */
+      swingPos: null,
       /** "⚔ +N" popups flying to the Power counter: `{ id, gain, x, y, dx, dy }`. */
       popups: [],
       /** `performance.now()` seconds of the last swing; drives the arm animation. */
@@ -58,18 +77,24 @@ export const useGame = create(
       },
 
       /**
-       * One swing of the equipped sword: gain its power, times any training. `popup`
-       * (`{ x, y, dx, dy }` in screen pixels) sends a "⚔ +N" flying from (x, y) by
-       * (dx, dy), to the Power counter.
+       * One swing of the equipped sword: gain its power, times training, level and
+       * boost. `popup` (`{ x, y, dx, dy }` in screen pixels) sends a "⚔ +N" flying
+       * from (x, y) by (dx, dy), to the Power counter. `at` is the player's position,
+       * if known.
        */
-      swing: (popup) => {
-        const { equipped, activeTrainer, power, popups } = get()
-        const gain = clickGain(getSword(equipped), getTrainer(activeTrainer))
-        const next = { power: power + gain, lastGain: gain, swingAt: performance.now() / 1000 }
+      swing: (popup, at) => {
+        const state = get()
+        const gain = clickGain(getSword(state.equipped), getTrainer(state.activeTrainer), powerMultiplier(state))
+        const next = {
+          power: state.power + gain,
+          lastGain: gain,
+          swingAt: performance.now() / 1000,
+          swingPos: at ?? null,
+        }
         if (popup) {
           const id = ++popupId
           // Capped, so frantic clicking can't pile up hundreds of elements.
-          next.popups = [...popups.slice(-24), { ...popup, gain, id }]
+          next.popups = [...state.popups.slice(-24), { ...popup, gain, id }]
           setTimeout(() => set({ popups: get().popups.filter((p) => p.id !== id) }), POPUP_MS)
         }
         set(next)
@@ -98,18 +123,28 @@ export const useGame = create(
         if (get().activeTrainer === id) set({ activeTrainer: null })
       },
 
-      /** A sword or egg came into E range. */
-      setInteract: (kind, id) => set({ interact: { kind, id } }),
+      /** A sword, egg or Win pad came into E range. */
+      setInteract: (kind, id) => set({ interact: { kind, id }, holdingSince: null }),
       /** It went out of range; ignored if something else has taken over since. */
       clearInteract: (kind, id) => {
         const current = get().interact
-        if (current?.kind === kind && current.id === id) set({ interact: null })
+        if (current?.kind === kind && current.id === id) set({ interact: null, holdingSince: null })
       },
       /** E pressed (or the prompt clicked): act on whatever is in range. */
       interactNow: () => {
         const target = get().interact
         if (target?.kind === 'sword') get().pickSword(target.id)
         else if (target?.kind === 'egg') get().openEgg(target.id)
+      },
+      /** E went down. Win pads need it held (see WinPad); everything else acts at once. */
+      interactStart: () => {
+        const { interact, holdingSince } = get()
+        if (interact?.kind !== 'pad') get().interactNow()
+        else if (holdingSince === null) set({ holdingSince: performance.now() / 1000 })
+      },
+      /** E came up. */
+      interactEnd: () => {
+        if (get().holdingSince !== null) set({ holdingSince: null })
       },
       /** Hatching isn't built yet, so opening an egg just says so. */
       openEgg: (id) => {
@@ -138,28 +173,92 @@ export const useGame = create(
         notify(`Bought ${sword.name}! +${formatNumber(sword.power)} Power per click`, 'success')
       },
 
-      /** Walking into a stage wall. Returns true if it broke. */
-      hitWall: (number, hp) => {
-        const { power, wins, notify } = get()
-        if (power < hp) {
-          notify(`Need ${formatNumber(hp)} Power to break wall ${number}`, 'error')
-          return false
+      /** Came within sword reach of a stage wall (`z`: the z of its centre). */
+      setNearWall: (number, z) => set({ nearWall: { number, z } }),
+      /** Left its reach; ignored if another wall has taken over since. */
+      clearNearWall: (number) => {
+        if (get().nearWall?.number === number) set({ nearWall: null })
+      },
+
+      /** A stage wall's health hit zero (see StageWall, which tracks the damage). */
+      breakWall: (number) => {
+        const { brokenWalls, bestWall, notify } = get()
+        set({ brokenWalls: { ...brokenWalls, [number]: true }, bestWall: Math.max(bestWall, number) })
+        if (number > 1 && (number - 1) % WALLS_PER_STAGE === 0) {
+          notify(`Stage ${wallStage(number)} reached!`, 'success')
         }
-        const reward = wallReward(number)
-        set({ wins: wins + reward })
-        notify(`Wall ${number} broken! +${formatNumber(reward)} Wins`, 'success')
-        return true
+      },
+      /** Back in the lobby: every broken wall rebuilds. */
+      resetWalls: () => set({ brokenWalls: {} }),
+
+      /**
+       * Held E long enough on a Win pad: pay out and rebuild the walls. Returns the
+       * Wins gained, or 0 if Power is too low; the pad then sends the player home.
+       */
+      claimPad: (number, pad) => {
+        const { power, wins, notify } = get()
+        const needed = padPower(number, pad)
+        if (power < needed) {
+          notify(`Need ${formatNumber(needed)} Power for this Win pad`, 'error')
+          return 0
+        }
+        const gain = padWins(number, pad)
+        set({ wins: wins + gain, brokenWalls: {}, nearWall: null, interact: null, holdingSince: null })
+        notify(`+${formatNumber(gain)} Wins! Back to the lobby`, 'success')
+        return gain
+      },
+
+      /** A power boost button: buy it, or add time if the same one is running. */
+      buyBoost: (multiplier) => {
+        const { wins, boost, notify } = get()
+        const def = BOOSTS.find((b) => b.multiplier === multiplier)
+        if (!def) return
+        const now = Date.now()
+        const current = activeBoost(boost, now)
+        if (current && current.multiplier > multiplier) {
+          notify(`Your x${current.multiplier} boost is still running`, 'error')
+          return
+        }
+        if (wins < def.cost) {
+          notify(`Need ${formatNumber(def.cost - wins)} more Wins for x${multiplier} Power`, 'error')
+          return
+        }
+        const start = current?.multiplier === multiplier ? current.until : now
+        set({ wins: wins - def.cost, boost: { multiplier, until: start + BOOST_S * 1000 } })
+        notify(`x${multiplier} Power for ${BOOST_S / 60} minutes!`, 'success')
+      },
+
+      /** An auto clicker button: start or stop it, buying the OP one the first time. */
+      toggleAutoClick: (kind) => {
+        const { autoClick, opAutoOwned, wins, notify } = get()
+        if (autoClick === kind) {
+          set({ autoClick: 'off' })
+          return
+        }
+        if (kind === 'op' && !opAutoOwned) {
+          const { cost } = AUTO_CLICKERS.op
+          if (wins < cost) {
+            notify(`Need ${formatNumber(cost - wins)} more Wins for the OP Auto Clicker`, 'error')
+            return
+          }
+          set({ wins: wins - cost, opAutoOwned: true })
+          notify('OP Auto Clicker unlocked!', 'success')
+        }
+        set({ autoClick: kind })
       },
     }),
     {
       name: 'ppc-progress',
       version: 1,
-      partialize: ({ power, wins, owned, equipped, unlockedTrainers }) => ({
+      partialize: ({ power, wins, owned, equipped, unlockedTrainers, bestWall, boost, opAutoOwned }) => ({
         power,
         wins,
         owned,
         equipped,
         unlockedTrainers,
+        bestWall,
+        boost,
+        opAutoOwned,
       }),
     },
   ),

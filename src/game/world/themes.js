@@ -1,3 +1,5 @@
+import { WALLS_PER_STAGE } from '../walls'
+
 /**
  * Map dimensions and per-stage themes.
  *
@@ -25,7 +27,22 @@ export const OPEN_H = 10
 export const GATE_Z = -LOBBY_HALF
 /** Z where stage 1's corridor begins (the back of the gate tower). */
 export const STAGE_START = GATE_Z - 6
-export const STAGE_LEN = 44
+/*
+ * Each stage is a tunnel of WALLS_PER_STAGE walls, one straight after another, that
+ * opens into the stage's cabin: an open room with a small room either side. The
+ * first wall sits in the gate at the tunnel's mouth (the lobby's gate tower for
+ * stage 1, the far end of the previous cabin after that).
+ */
+/** Front-to-front distance between consecutive walls in a tunnel. */
+export const WALL_GAP = 4.5
+/** Depth of the dark frame each wall sits in. */
+export const DIVIDER_T = 2
+/** Floor between the back of a stage's gate and its second wall (as between the rest). */
+export const TUNNEL_LEAD = WALL_GAP - DIVIDER_T
+/** Length of a stage's cabin. */
+export const CABIN_LEN = 44
+/** From one stage's gate (back face) to the next's. */
+export const STAGE_LEN = TUNNEL_LEAD + (WALLS_PER_STAGE - 2) * WALL_GAP + DIVIDER_T + CABIN_LEN + DIVIDER_T
 
 /** Near the north end of the central path, facing the gate. */
 export const SPAWN = [0, 2, LOBBY_HALF - 12]
@@ -36,17 +53,19 @@ export const FRAME_COLOR = '#6ff7ff'
 const DEFAULT_FLOOR = ['#c9ccdb', '#abafc4']
 
 /**
- * One entry per stage. Wall N is the doorway *into* stage N.
+ * One entry per stage; all ten of a stage's walls share its look.
  *
- * wall.style: 'cobble' | 'crystal' | 'lava' (voronoi rock), 'bricks', 'planks'
+ * wall.style: 'cobble' | 'crystal' | 'lava' (voronoi rock), 'stones' (big rounded
+ *             blocks), 'bricks', 'planks'
  * wall.glow:  emissive strength of the wall surface (0 = none)
+ * wall.moss:  leaves growing over it
  * side:       tint for the corridor's panelled walls
  * neon:       strip-light colour along the corridor
  */
 export const THEMES = [
   {
     name: 'Stone',
-    wall: { style: 'cobble', palette: ['#9aa0a8', '#8b9199', '#a9aeb5', '#7f858e'], gap: '#474b52', moss: true },
+    wall: { style: 'stones', palette: ['#b9c0cc', '#a7afbd', '#c8ced9', '#9aa2b1'], gap: '#474c57', moss: true },
     side: '#6a70a8',
     neon: '#62f3ff',
   },
@@ -125,11 +144,14 @@ export const THEMES = [
 
 export const STAGE_COUNT = THEMES.length
 
-/** Z where stage `k` (1-based) begins. */
+/** Z where stage `k` (1-based) begins: the back face of the gate holding its first wall. */
 export const stageStart = (k) => STAGE_START - (k - 1) * STAGE_LEN
 
-/** Z of the closed wall at the very end of the last stage. */
-export const END_Z = stageStart(STAGE_COUNT + 1)
+/** Z where stage `k`'s tunnel of walls opens into its cabin. */
+export const cabinStart = (k) => stageStart(k) - (TUNNEL_LEAD + (WALLS_PER_STAGE - 2) * WALL_GAP + DIVIDER_T)
 
-/** Cosmetic HP shown on each wall's health bar. */
-export const wallHp = (number) => (number === 1 ? 1 : Math.round(2.2 * 1.62 ** (number - 1)))
+/** Z of the far end of stage `k`'s cabin: the front face of the next stage's gate. */
+export const cabinEnd = (k) => cabinStart(k) - CABIN_LEN
+
+/** Front face of the closed wall at the far end of the last cabin. */
+export const END_Z = cabinEnd(STAGE_COUNT)

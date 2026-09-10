@@ -1,23 +1,71 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Object3D } from 'three'
 
+import { useGame } from '../gameStore'
 import { getSword } from '../swords'
 import { Backdrop, Clouds, Crown, Crystal, GlowPad, Label, Sky } from './Effects'
 import EggStand from './EggStand'
 import { buildLayout } from './layout'
 import Portal from './Portal'
+import Roofs from './Roofs'
 import StageWall from './StageWall'
 import StaticBlocks from './StaticBlocks'
 import SwordPad from './SwordPad'
 import SwordStatue from './SwordStatue'
+import { GATE_Z, SPAWN } from './themes'
 import TrainingDummy from './TrainingDummy'
+import WinPad from './WinPad'
+
+/** Walls and Win pads are only mounted within this distance (along z) of the player. */
+const WALL_VIEW = 110
+/** The mounted set is re-centred each time the player crosses a band this long. */
+const WALL_BAND = 20
+/** This far into the lobby, every broken wall rebuilds. */
+const LOBBY_RESET_Z = GATE_Z + 6
+
+/**
+ * The stage walls and Win pads near the player. There are well over a hundred of
+ * each, so only the nearby ones are mounted; broken-wall state lives in the store,
+ * so a wall remounts as it was. Walking back into the lobby rebuilds them all.
+ */
+function WallField({ walls, winPads, bodyRef }) {
+  const [band, setBand] = useState(() => Math.round(SPAWN[2] / WALL_BAND))
+
+  useFrame(() => {
+    const p = bodyRef.current?.translation()
+    if (!p) return
+    const next = Math.round(p.z / WALL_BAND)
+    if (next !== band) setBand(next)
+    if (p.z > LOBBY_RESET_Z) {
+      const game = useGame.getState()
+      if (Object.keys(game.brokenWalls).length > 0) game.resetWalls()
+    }
+  })
+
+  const z = band * WALL_BAND
+  const near = (at) => Math.abs(at - z) < WALL_VIEW
+  return (
+    <>
+      {walls
+        .filter((wall) => near(wall.zFront))
+        .map((wall) => (
+          <StageWall key={wall.number} {...wall} />
+        ))}
+      {winPads
+        .filter((pad) => near(pad.position[2]))
+        .map((pad) => (
+          <WinPad key={`${pad.number}:${pad.pad.id}`} {...pad} />
+        ))}
+    </>
+  )
+}
 
 /**
  * The whole map: the lobby, the gate, and every stage corridor behind it.
- * Must be rendered inside <Physics>.
+ * Must be rendered inside <Physics>. `bodyRef` is the player's body.
  */
-export function World() {
+export function World({ bodyRef }) {
   const layout = useMemo(() => buildLayout(), [])
   return (
     <>
@@ -25,9 +73,8 @@ export function World() {
       <Clouds />
       <Backdrop />
       <StaticBlocks blocks={layout.blocks} />
-      {layout.walls.map((wall) => (
-        <StageWall key={wall.number} {...wall} />
-      ))}
+      <Roofs roofs={layout.roofs} />
+      <WallField walls={layout.walls} winPads={layout.winPads} bodyRef={bodyRef} />
       {layout.portals.map((portal, i) => (
         <Portal key={i} {...portal} />
       ))}

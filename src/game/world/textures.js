@@ -167,7 +167,7 @@ export function panelTexture() {
 // --- Stage wall surfaces --------------------------------------------------------
 
 /** Voronoi rock: cobbles, ice, crystal and lava are all this with different palettes. */
-function voronoi(ctx, w, h, { palette, gap, gapWidth = 3, bevel = 0.4, cols = 10, rows = 6, seed }) {
+function voronoi(ctx, w, h, { palette, gap, gapWidth = 3, bevel = 0.4, cols = 10, rows = 6, facets = false, seed }) {
   const rand = mulberry32(seed)
   const cw = w / cols
   const ch = h / rows
@@ -221,10 +221,18 @@ function voronoi(ctx, w, h, { palette, gap, gapWidth = 3, bevel = 0.4, cols = 10
         data[o + 1] = gapRgb[1] * k
         data[o + 2] = gapRgb[2] * k
       } else {
-        const t = Math.min(1, (edge - gapWidth) / (size * 0.3))
+        const inner = edge - gapWidth
+        const t = Math.min(1, inner / (size * 0.3))
+        const dx = (x - best.x) / size
+        const dy = (y - best.y) / size
+        // Chiselled rim: each stone's upper-left edge catches the light and its
+        // lower-right edge falls into shadow.
+        const rimW = size * 0.08
+        const rim = inner < rimW ? (dx + dy < 0 ? 0.32 : -0.28) * (1 - inner / rimW) : 0
+        // Crystal: every cell splits into a light and a dark facet.
+        const facet = facets ? (dx * 0.8 - dy > 0 ? 0.14 : -0.06) : 0
         // Domed stones, lit from the top-left.
-        const dir = (best.x - x + (best.y - y)) / size
-        const light = (1 - bevel + bevel * t + dir * 0.12) * (0.96 + rand() * 0.08)
+        const light = (1 - bevel + bevel * t - (dx + dy) * 0.12 + rim + facet) * (0.96 + rand() * 0.08)
         data[o] = best.c[0] * light
         data[o + 1] = best.c[1] * light
         data[o + 2] = best.c[2] * light
@@ -235,31 +243,106 @@ function voronoi(ctx, w, h, { palette, gap, gapWidth = 3, bevel = 0.4, cols = 10
   ctx.putImageData(img, 0, 0)
 }
 
+/**
+ * One chunky, bevelled block: lit along its top and left edges, shaded along the
+ * bottom and right, with speckles, the odd crack, and a soft shadow into the mortar.
+ */
+function drawBlock(ctx, x, y, bw, bh, color, rand, { radius = 0.22, bevel = 0.1, outline = null } = {}) {
+  const r = Math.min(bw, bh) * radius
+  const d = Math.min(bw, bh) * bevel
+  const shape = (sx, sy, sw, sh) => {
+    ctx.beginPath()
+    ctx.roundRect(sx, sy, sw, sh, r)
+  }
+
+  shape(x + d * 0.4, y + d * 0.6, bw, bh)
+  ctx.fillStyle = 'rgba(0,0,0,0.3)'
+  ctx.fill()
+
+  ctx.save()
+  shape(x, y, bw, bh)
+  ctx.clip()
+  // Dark base, a lit copy shifted up-left over it, then the face inset on top: what
+  // shows of the first two is the bevel.
+  ctx.fillStyle = shade(color, -0.3)
+  ctx.fillRect(x, y, bw, bh)
+  shape(x - d, y - d, bw, bh)
+  ctx.fillStyle = shade(color, 0.3)
+  ctx.fill()
+  const face = ctx.createLinearGradient(0, y, 0, y + bh)
+  face.addColorStop(0, shade(color, 0.08))
+  face.addColorStop(1, shade(color, -0.1))
+  shape(x + d, y + d, bw - 2 * d, bh - 2 * d)
+  ctx.fillStyle = face
+  ctx.fill()
+
+  for (let i = 0; i < 5; i++) {
+    const sx = x + d + rand() * (bw - 2 * d)
+    const sy = y + d + rand() * (bh - 2 * d)
+    disc(ctx, sx, sy, 1.5 + rand() * 2.5, shade(color, rand() < 0.5 ? -0.14 : 0.12))
+  }
+  if (rand() < 0.3) {
+    let cx = x + bw * (0.2 + rand() * 0.6)
+    let cy = y + d
+    ctx.beginPath()
+    ctx.moveTo(cx, cy)
+    for (let k = 0; k < 3; k++) {
+      cx += (rand() - 0.5) * bw * 0.2
+      cy += bh * 0.22
+      ctx.lineTo(cx, cy)
+    }
+    ctx.lineWidth = 2
+    ctx.strokeStyle = shade(color, -0.35)
+    ctx.stroke()
+  }
+  ctx.restore()
+
+  if (outline) {
+    shape(x, y, bw, bh)
+    ctx.lineWidth = 2.5
+    ctx.strokeStyle = outline
+    ctx.stroke()
+  }
+}
+
+/** Big rounded stone blocks in staggered rows, like a castle wall. */
+function stones(ctx, w, h, { palette, gap, seed, rows = 5 }) {
+  const rand = mulberry32(seed)
+  ctx.fillStyle = gap
+  ctx.fillRect(0, 0, w, h)
+  const rh = h / rows
+  const m = rh * 0.07
+  for (let r = 0; r < rows; r++) {
+    let x = -rand() * rh
+    while (x < w) {
+      const bw = rh * (1.3 + rand() * 1.1)
+      const color = palette[Math.floor(rand() * palette.length)]
+      drawBlock(ctx, x + m, r * rh + m, bw - 2 * m, rh - 2 * m, color, rand, {
+        radius: 0.28,
+        bevel: 0.09,
+        outline: shade(gap, -0.3),
+      })
+      x += bw
+    }
+  }
+}
+
 function bricks(ctx, w, h, { palette, gap, seed, rows = 8, cols = 5 }) {
   const rand = mulberry32(seed)
   ctx.fillStyle = gap
   ctx.fillRect(0, 0, w, h)
   const rh = h / rows
   const bw = w / cols
-  const m = 3
+  const m = rh * 0.06
   for (let r = 0; r < rows; r++) {
     const offset = r % 2 ? bw / 2 : 0
     for (let c = -1; c <= cols; c++) {
-      const x = c * bw + offset + m
-      const y = r * rh + m
-      const width = bw - 2 * m
-      const height = rh - 2 * m
       const color = palette[Math.floor(rand() * palette.length)]
-      ctx.fillStyle = color
-      ctx.fillRect(x, y, width, height)
-      ctx.fillStyle = shade(color, 0.2)
-      ctx.fillRect(x, y, width, 4)
-      ctx.fillStyle = shade(color, -0.22)
-      ctx.fillRect(x, y + height - 4, width, 4)
-      for (let i = 0; i < 6; i++) {
-        ctx.fillStyle = shade(color, rand() < 0.5 ? -0.1 : 0.08)
-        ctx.fillRect(x + rand() * (width - 6), y + 4 + rand() * (height - 12), 5, 3)
-      }
+      drawBlock(ctx, c * bw + offset + m, r * rh + m, bw - 2 * m, rh - 2 * m, color, rand, {
+        radius: 0.18,
+        bevel: 0.12,
+        outline: shade(gap, -0.25),
+      })
     }
   }
 }
@@ -300,21 +383,36 @@ function planks(ctx, w, h, { palette, gap, seed, rows = 7 }) {
   }
 }
 
-function moss(ctx, w, h, seed) {
+/** Clusters of little leaves, mostly hanging along the top edge. */
+function leaves(ctx, w, h, seed) {
   const rand = mulberry32(seed + 99)
-  for (let i = 0; i < 16; i++) {
+  const unit = w / 512
+  for (let i = 0; i < 15; i++) {
     const cx = rand() * w
-    // Vines gather along the top edge, with the odd patch lower down.
-    const cy = rand() < 0.6 ? rand() * h * 0.18 : rand() * h
-    const n = 6 + rand() * 10
+    const cy = rand() < 0.55 ? rand() * h * 0.14 : rand() * h
+    const n = 4 + Math.floor(rand() * 3)
+    const base = rand() * Math.PI * 2
     for (let k = 0; k < n; k++) {
-      disc(
-        ctx,
-        cx + (rand() - 0.5) * 44,
-        cy + (rand() - 0.2) * 26,
-        3 + rand() * 7,
-        rand() < 0.5 ? '#5aa83a' : '#478f2e',
-      )
+      const len = (12 + rand() * 10) * unit
+      ctx.save()
+      ctx.translate(cx, cy)
+      ctx.rotate(base + (k / n) * Math.PI * 2 + (rand() - 0.5) * 0.5)
+      ctx.beginPath()
+      ctx.moveTo(0, 0)
+      ctx.quadraticCurveTo(len * 0.5, -len * 0.42, len, 0)
+      ctx.quadraticCurveTo(len * 0.5, len * 0.42, 0, 0)
+      ctx.fillStyle = rand() < 0.5 ? '#6cc044' : '#4fa233'
+      ctx.fill()
+      ctx.lineWidth = 1.6 * unit
+      ctx.strokeStyle = '#2c5c1b'
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(len * 0.15, 0)
+      ctx.lineTo(len * 0.8, 0)
+      ctx.lineWidth = 1.2 * unit
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)'
+      ctx.stroke()
+      ctx.restore()
     }
   }
 }
@@ -322,66 +420,108 @@ function moss(ctx, w, h, seed) {
 /** The breakable-looking surface for stage wall `id`, drawn from its theme. */
 export function wallTexture(id, def) {
   return cached(`wall:${id}`, () => {
-    const w = 512
-    const h = 320
+    // 48px per world unit across the 16 x 10 doorway.
+    const w = 768
+    const h = 480
+    const px = w / 512
     const [canvas, ctx] = makeCanvas(w, h)
     const seed = id * 7919
-    if (def.style === 'bricks') bricks(ctx, w, h, { ...def, seed })
+    if (def.style === 'stones') stones(ctx, w, h, { ...def, seed })
+    else if (def.style === 'bricks') bricks(ctx, w, h, { ...def, seed })
     else if (def.style === 'planks') planks(ctx, w, h, { ...def, seed })
-    else if (def.style === 'lava') voronoi(ctx, w, h, { ...def, seed, cols: 9, gapWidth: 5, bevel: 0.45 })
-    else if (def.style === 'crystal') voronoi(ctx, w, h, { ...def, seed, gapWidth: 2.5, bevel: 0.6 })
-    else voronoi(ctx, w, h, { ...def, seed })
-    if (def.moss) moss(ctx, w, h, seed)
+    else if (def.style === 'lava') voronoi(ctx, w, h, { ...def, seed, cols: 9, gapWidth: 5 * px, bevel: 0.45 })
+    else if (def.style === 'crystal') voronoi(ctx, w, h, { ...def, seed, gapWidth: 2.5 * px, bevel: 0.5, facets: true })
+    else voronoi(ctx, w, h, { ...def, seed, gapWidth: 3 * px })
+    if (def.moss) leaves(ctx, w, h, seed)
     return finish(canvas, { repeat: false })
   })
 }
 
-/** Big wall number plus a full green health bar, laid over the wall surface. */
-export function wallOverlayTexture(number, hp) {
-  return cached(`overlay:${number}:${hp}`, () => {
-    const w = 512
-    const h = 320
-    const [canvas, ctx] = makeCanvas(w, h)
+/**
+ * The wall's big number on a transparent canvas laid over its surface. Not cached:
+ * there are over a hundred walls, so each mounted wall owns (and disposes) its own.
+ */
+export function createWallNumber(number) {
+  const w = 384
+  const h = 240
+  const [canvas, ctx] = makeCanvas(w, h)
+  const text = String(number)
+  const x = w / 2
+  const y = h * 0.3
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineJoin = 'round'
+  ctx.font = `900 88px ${FONT}`
+
+  ctx.lineWidth = 16
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)'
+  ctx.strokeText(text, x, y + 6)
+  ctx.lineWidth = 13
+  ctx.strokeStyle = '#15151d'
+  ctx.strokeText(text, x, y)
+  const grad = ctx.createLinearGradient(0, y - 38, 0, y + 38)
+  grad.addColorStop(0, '#ffffff')
+  grad.addColorStop(1, '#d9e1ef')
+  ctx.fillStyle = grad
+  ctx.fillText(text, x, y)
+  return finish(canvas, { repeat: false })
+}
+
+/** Canvas size of a health bar; its plane should keep this aspect. */
+export const HP_BAR_ASPECT = 512 / 72
+
+/**
+ * A wall's health bar: a rounded pill that empties from green through yellow to red,
+ * with "hp / max" on it. Redraw it with `draw(hp, max)` whenever the health changes.
+ */
+export function createHpBar() {
+  const w = 512
+  const h = 72
+  const [canvas, ctx] = makeCanvas(w, h)
+  const texture = finish(canvas, { repeat: false })
+  const outline = '#111a0c'
+
+  const draw = (hp, max) => {
+    const f = Math.max(0, Math.min(1, hp / max))
+    ctx.clearRect(0, 0, w, h)
+    ctx.fillStyle = outline
+    ctx.beginPath()
+    ctx.roundRect(3, 3, w - 6, h - 6, (h - 6) / 2)
+    ctx.fill()
+
+    const ix = 11
+    const iy = 11
+    const ih = h - 22
+    const iw = (w - 22) * f
+    if (iw > 0) {
+      const [top, bottom] = f > 0.5 ? ['#b4ff6e', '#35c21d'] : f > 0.25 ? ['#fff07a', '#e0a800'] : ['#ff9a7a', '#d62a1a']
+      const grad = ctx.createLinearGradient(0, iy, 0, iy + ih)
+      grad.addColorStop(0, top)
+      grad.addColorStop(1, bottom)
+      ctx.fillStyle = grad
+      ctx.beginPath()
+      ctx.roundRect(ix, iy, iw, ih, ih / 2)
+      ctx.fill()
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'
+      ctx.beginPath()
+      ctx.roundRect(ix + 8, iy + 4, Math.max(0, iw - 16), ih * 0.22, ih * 0.11)
+      ctx.fill()
+    }
+
+    const label = `${formatNumber(hp)} / ${formatNumber(max)}`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.lineJoin = 'round'
-
-    ctx.font = `900 110px ${FONT}`
-    ctx.lineWidth = 16
-    ctx.strokeStyle = 'rgba(20,20,30,0.9)'
-    ctx.strokeText(String(number), w / 2, h * 0.3)
+    ctx.font = `900 38px ${FONT}`
+    ctx.lineWidth = 9
+    ctx.strokeStyle = outline
+    ctx.strokeText(label, w / 2, h / 2 + 2)
     ctx.fillStyle = '#ffffff'
-    ctx.fillText(String(number), w / 2, h * 0.3)
+    ctx.fillText(label, w / 2, h / 2 + 2)
+    texture.needsUpdate = true
+  }
 
-    const bw = w * 0.64
-    const bh = 42
-    const bx = (w - bw) / 2
-    const by = h * 0.6
-    ctx.fillStyle = '#16240d'
-    ctx.beginPath()
-    ctx.roundRect(bx, by, bw, bh, bh / 2)
-    ctx.fill()
-    const grad = ctx.createLinearGradient(0, by, 0, by + bh)
-    grad.addColorStop(0, '#b4ff6e')
-    grad.addColorStop(1, '#35c21d')
-    ctx.fillStyle = grad
-    ctx.beginPath()
-    ctx.roundRect(bx + 5, by + 5, bw - 10, bh - 10, (bh - 10) / 2)
-    ctx.fill()
-    ctx.fillStyle = 'rgba(255,255,255,0.35)'
-    ctx.beginPath()
-    ctx.roundRect(bx + 14, by + 8, bw - 28, 7, 3.5)
-    ctx.fill()
-
-    const label = `${formatNumber(hp)} / ${formatNumber(hp)}`
-    ctx.font = `900 30px ${FONT}`
-    ctx.lineWidth = 8
-    ctx.strokeStyle = '#16240d'
-    ctx.strokeText(label, w / 2, by + bh / 2 + 1)
-    ctx.fillStyle = '#ffffff'
-    ctx.fillText(label, w / 2, by + bh / 2 + 1)
-    return finish(canvas, { repeat: false })
-  })
+  return { texture, draw }
 }
 
 // --- Effects --------------------------------------------------------------------
@@ -579,64 +719,88 @@ export function labelTexture({
     const w = width
     const h = Math.max(32, Math.round(w / aspect))
     const [canvas, ctx] = makeCanvas(w, h)
-    const short = Math.min(w, h)
-    const pad = short * 0.1
-
-    if (bg) {
-      ctx.fillStyle = bg
-      ctx.beginPath()
-      ctx.roundRect(0, 0, w, h, short * 0.12)
-      ctx.fill()
-    }
-    if (border) {
-      const lw = short * 0.05
-      ctx.lineWidth = lw
-      ctx.strokeStyle = border
-      ctx.beginPath()
-      ctx.roundRect(lw / 2, lw / 2, w - lw, h - lw, short * 0.1)
-      ctx.stroke()
-    }
-
-    const items = lines.map((line) => (typeof line === 'string' ? { text: line } : line))
-    const totalWeight = items.reduce((sum, item) => sum + (item.scale ?? 1), 0)
-    const unit = (h - pad * 2) / totalWeight
-    let y = pad
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.lineJoin = 'round'
-    for (const item of items) {
-      const lineH = unit * (item.scale ?? 1)
-      let size = lineH * 0.78
-      ctx.font = `900 ${size}px ${FONT}`
-      // An icon is drawn one text-height square, plus a small gap, left of the text.
-      const iconRatio = item.icon ? 1.15 : 0
-      const measured = ctx.measureText(item.text).width + size * iconRatio
-      const maxW = w - pad * 2
-      if (measured > maxW) {
-        size *= maxW / measured
-        ctx.font = `900 ${size}px ${FONT}`
-      }
-      const iconW = size * iconRatio
-      const x = (w - ctx.measureText(item.text).width - iconW) / 2 + iconW
-      const cy = y + lineH / 2
-      if (item.icon) drawIcon(ctx, item.icon, x - iconW, cy - size * 0.55, size)
-      ctx.textAlign = 'left'
-      if (stroke) {
-        ctx.lineWidth = size * 0.2
-        ctx.strokeStyle = stroke
-        ctx.strokeText(item.text, x, cy)
-      }
-      const color = item.fill ?? fill
-      if (Array.isArray(color)) {
-        const grad = ctx.createLinearGradient(0, cy - size / 2, 0, cy + size / 2)
-        color.forEach((c, i) => grad.addColorStop(i / (color.length - 1), c))
-        ctx.fillStyle = grad
-      } else {
-        ctx.fillStyle = color
-      }
-      ctx.fillText(item.text, x, cy)
-      y += lineH
-    }
+    drawLabel(ctx, w, h, { lines, fill, stroke, bg, border })
     return finish(canvas, { repeat: false })
   })
+}
+
+/**
+ * A label you redraw in place, for text that changes on every use (damage numbers),
+ * where caching a texture per value would grow without limit.
+ * `draw({ lines, fill, stroke })` takes the same options as `labelTexture`.
+ */
+export function createDynamicLabel({ aspect, width = 256 }) {
+  const w = width
+  const h = Math.max(32, Math.round(w / aspect))
+  const [canvas, ctx] = makeCanvas(w, h)
+  const texture = finish(canvas, { repeat: false })
+  return {
+    texture,
+    draw(options) {
+      ctx.clearRect(0, 0, w, h)
+      drawLabel(ctx, w, h, options)
+      texture.needsUpdate = true
+    },
+  }
+}
+
+function drawLabel(ctx, w, h, { lines, fill = '#ffffff', stroke = '#1b1b25', bg = null, border = null }) {
+  const short = Math.min(w, h)
+  const pad = short * 0.1
+
+  if (bg) {
+    ctx.fillStyle = bg
+    ctx.beginPath()
+    ctx.roundRect(0, 0, w, h, short * 0.12)
+    ctx.fill()
+  }
+  if (border) {
+    const lw = short * 0.05
+    ctx.lineWidth = lw
+    ctx.strokeStyle = border
+    ctx.beginPath()
+    ctx.roundRect(lw / 2, lw / 2, w - lw, h - lw, short * 0.1)
+    ctx.stroke()
+  }
+
+  const items = lines.map((line) => (typeof line === 'string' ? { text: line } : line))
+  const totalWeight = items.reduce((sum, item) => sum + (item.scale ?? 1), 0)
+  const unit = (h - pad * 2) / totalWeight
+  let y = pad
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineJoin = 'round'
+  for (const item of items) {
+    const lineH = unit * (item.scale ?? 1)
+    let size = lineH * 0.78
+    ctx.font = `900 ${size}px ${FONT}`
+    // An icon is drawn one text-height square, plus a small gap, left of the text.
+    const iconRatio = item.icon ? 1.15 : 0
+    const measured = ctx.measureText(item.text).width + size * iconRatio
+    const maxW = w - pad * 2
+    if (measured > maxW) {
+      size *= maxW / measured
+      ctx.font = `900 ${size}px ${FONT}`
+    }
+    const iconW = size * iconRatio
+    const x = (w - ctx.measureText(item.text).width - iconW) / 2 + iconW
+    const cy = y + lineH / 2
+    if (item.icon) drawIcon(ctx, item.icon, x - iconW, cy - size * 0.55, size)
+    ctx.textAlign = 'left'
+    if (stroke) {
+      ctx.lineWidth = size * 0.2
+      ctx.strokeStyle = stroke
+      ctx.strokeText(item.text, x, cy)
+    }
+    const color = item.fill ?? fill
+    if (Array.isArray(color)) {
+      const grad = ctx.createLinearGradient(0, cy - size / 2, 0, cy + size / 2)
+      color.forEach((c, i) => grad.addColorStop(i / (color.length - 1), c))
+      ctx.fillStyle = grad
+    } else {
+      ctx.fillStyle = color
+    }
+    ctx.fillText(item.text, x, cy)
+    y += lineH
+  }
 }

@@ -4,6 +4,7 @@ import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { useRef } from 'react'
 import { AdditiveBlending, DoubleSide } from 'three'
 
+import { useGame } from '../gameStore'
 import { radialGlowTexture, swirlTexture } from './textures'
 
 const CENTER_Y = 4.2
@@ -13,9 +14,10 @@ const RADIUS = 3.3
  * Swirling purple portal. Walking into it teleports the player to `target`.
  * The stone arch around it is part of the static map (see layout.js).
  *
- * @param {{ position: number[], rotationY?: number, target: number[] }} props
+ * @param {{ position: number[], rotationY?: number, target: number[], requiresWall?: number }} props
+ *   With `requiresWall`, it only works once that stage wall has been broken.
  */
-export function Portal({ position, rotationY = 0, target }) {
+export function Portal({ position, rotationY = 0, target, requiresWall = 0 }) {
   const front = useRef(null)
   const back = useRef(null)
   const halo = useRef(null)
@@ -28,6 +30,11 @@ export function Portal({ position, rotationY = 0, target }) {
 
   const onEnter = ({ other }) => {
     if (other.rigidBodyObject?.name !== 'player' || !other.rigidBody) return
+    const game = useGame.getState()
+    if (game.bestWall < requiresWall) {
+      game.notify(`Break wall ${requiresWall} to unlock this portal`, 'error')
+      return
+    }
     other.rigidBody.setTranslation({ x: target[0], y: target[1], z: target[2] }, true)
     other.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true)
   }

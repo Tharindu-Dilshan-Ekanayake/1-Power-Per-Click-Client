@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { Vector3 } from 'three'
 
 import { useGame } from './gameStore'
+import { AUTO_CLICKERS } from './progression'
 
 /** Seconds between automatic swings while standing on a training pad. */
 const AUTO_TRAIN_S = 0.4
@@ -35,33 +36,40 @@ export function SwingInput({ bodyRef }) {
   useEffect(() => {
     const el = gl.domElement
     const onPointerDown = (e) => {
-      if (e.button === 0) useGame.getState().swing(popupPath(e.clientX, e.clientY))
+      if (e.button !== 0) return
+      // The player's position lets a stage wall tell which side it was hit from.
+      const p = bodyRef.current?.translation()
+      useGame.getState().swing(popupPath(e.clientX, e.clientY), p && [p.x, p.y, p.z])
     }
     el.addEventListener('pointerdown', onPointerDown)
     return () => el.removeEventListener('pointerdown', onPointerDown)
-  }, [gl])
+  }, [gl, bodyRef])
 
   useFrame((_state, delta) => {
-    if (!useGame.getState().activeTrainer) {
+    // Training and the auto clickers both swing on a timer; the fastest one wins.
+    const game = useGame.getState()
+    let interval = Infinity
+    if (game.activeTrainer) interval = AUTO_TRAIN_S
+    if (game.autoClick !== 'off') interval = Math.min(interval, AUTO_CLICKERS[game.autoClick].interval)
+    if (interval === Infinity) {
       autoTimer.current = 0
       return
     }
     autoTimer.current += delta
-    if (autoTimer.current < AUTO_TRAIN_S) return
+    if (autoTimer.current < interval) return
     autoTimer.current = 0
 
     // Start the popup at the player's chest on screen.
     const rect = gl.domElement.getBoundingClientRect()
     let x = rect.left + rect.width / 2
     let y = rect.top + rect.height * 0.55
-    const body = bodyRef.current
-    if (body) {
-      const p = body.translation()
+    const p = bodyRef.current?.translation()
+    if (p) {
       _screen.set(p.x, p.y + 1.2, p.z).project(camera)
       x = rect.left + ((_screen.x + 1) / 2) * rect.width
       y = rect.top + ((1 - _screen.y) / 2) * rect.height
     }
-    useGame.getState().swing(popupPath(x + (Math.random() - 0.5) * 60, y))
+    useGame.getState().swing(popupPath(x + (Math.random() - 0.5) * 60, y), p && [p.x, p.y, p.z])
   })
 
   return null

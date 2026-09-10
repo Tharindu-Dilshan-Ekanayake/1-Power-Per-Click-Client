@@ -1,7 +1,23 @@
-/** Short number format for the HUD and signs: 950, 1.2K, 3.4M, 5.6B. */
+const UNITS = [
+  [1e18, 'Qi'],
+  [1e15, 'Qa'],
+  [1e12, 'T'],
+  [1e9, 'B'],
+  [1e6, 'M'],
+  [1e3, 'K'],
+]
+
+/** Short number format for the HUD and signs: 950, 1.2K, 3.4M, 5.6B, 7.8T. */
 export function formatNumber(n) {
-  if (n >= 1e9) return `${+(n / 1e9).toFixed(1)}B`
-  if (n >= 1e6) return `${+(n / 1e6).toFixed(1)}M`
-  if (n >= 1e3) return `${+(n / 1e3).toFixed(1)}K`
+  for (const [size, suffix] of UNITS) {
+    if (n >= size) return `${+(n / size).toFixed(1)}${suffix}`
+  }
   return String(Math.floor(n))
+}
+
+/** Rounds to two significant figures, so balance numbers stay tidy (1234 → 1200). */
+export function tidy(n) {
+  if (n < 100) return Math.round(n)
+  const step = 10 ** (Math.floor(Math.log10(n)) - 1)
+  return Math.round(n / step) * step
 }
