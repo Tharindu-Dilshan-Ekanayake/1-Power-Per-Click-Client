@@ -2,6 +2,7 @@ import GameScene from './game/GameScene'
 import AuthHUD from './ui/AuthHUD'
 import Controls from './ui/Controls'
 import GameHUD from './ui/GameHUD'
+import LoadingScreen from './ui/LoadingScreen'
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
       <AuthHUD />
       <GameHUD />
       <Controls />
+      <LoadingScreen />
     </div>
   )
 }

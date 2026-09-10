@@ -1,10 +1,11 @@
-import { Environment } from '@react-three/drei'
+import { Environment, Lightformer } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Physics } from '@react-three/rapier'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
 import { useBloxity } from '../bloxity/BloxityContext'
 import FollowCamera from './FollowCamera'
+import { useLoading } from './loadingStore'
 import Player from './Player'
 import SwingInput from './SwingInput'
 import { SPAWN } from './world/themes'
@@ -24,6 +25,46 @@ function FirstFrameSignal({ onFirstFrame }) {
   return null
 }
 
+/** Tells the loading screen the map has been drawn (mounted after World, in its Suspense). */
+function WorldReady() {
+  useFrame(() => {
+    const loading = useLoading.getState()
+    if (!loading.world) loading.worldReady()
+  })
+  return null
+}
+
+/**
+ * Soft reflections and fill light, built from a few light panels in the scene
+ * itself. drei's `preset="city"` downloads an HDR file from an external CDN, and
+ * until it arrives (or forever, if that host is slow or blocked) everything in the
+ * same Suspense stays invisible.
+ */
+function LocalEnvironment() {
+  return (
+    <Environment resolution={64} frames={1} environmentIntensity={0.35}>
+      <color attach="background" args={['#9fc6e8']} />
+      <Lightformer form="rect" intensity={2} position={[0, 10, 0]} rotation-x={Math.PI / 2} scale={[20, 20, 1]} />
+      <Lightformer
+        form="rect"
+        intensity={1}
+        color="#ffe9c4"
+        position={[10, 3, 0]}
+        rotation-y={-Math.PI / 2}
+        scale={[20, 5, 1]}
+      />
+      <Lightformer
+        form="rect"
+        intensity={0.6}
+        color="#bfe0ff"
+        position={[-10, 3, 0]}
+        rotation-y={Math.PI / 2}
+        scale={[20, 5, 1]}
+      />
+    </Environment>
+  )
+}
+
 export function GameScene() {
   const { game } = useBloxity()
   const playerBodyRef = useRef(null)
@@ -31,7 +72,10 @@ export function GameScene() {
   const [avatarReady, setAvatarReady] = useState(false)
   const loadingEnded = useRef(false)
 
-  const handleAvatarReady = useCallback(() => setAvatarReady(true), [])
+  const handleAvatarReady = useCallback(() => {
+    setAvatarReady(true)
+    useLoading.getState().avatarReady()
+  }, [])
 
   // Only end the loading screen once the avatar has finished assembling *and* a
   // frame has rendered with it in place.
@@ -63,10 +107,11 @@ export function GameScene() {
       <hemisphereLight args={['#d6ecff', '#6b8f5a', 0.7]} />
       <SunLight bodyRef={playerBodyRef} />
 
+      <LocalEnvironment />
       <Suspense fallback={null}>
-        <Environment preset="city" environmentIntensity={0.35} />
         <Physics gravity={[0, -18, 0]}>
           <World bodyRef={playerBodyRef} />
+          <WorldReady />
           <Player
             bodyRef={playerBodyRef}
             position={SPAWN}

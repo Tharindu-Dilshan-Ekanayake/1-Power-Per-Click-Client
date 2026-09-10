@@ -1,8 +1,9 @@
 import { useFrame } from '@react-three/fiber'
 import { CapsuleCollider, RigidBody, useRapier } from '@react-three/rapier'
-import { useRef } from 'react'
+import { Suspense, useRef } from 'react'
 import { Quaternion, Vector3 } from 'three'
 
+import { AvatarBoundary, StandInBody } from './AvatarBoundary'
 import { useGame } from './gameStore'
 import PlayerAvatar from './PlayerAvatar'
 import { WALK_SPEED } from './progression'
@@ -204,11 +205,21 @@ export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalB
       <CapsuleCollider args={[CAPSULE_HALF_HEIGHT, CAPSULE_RADIUS]} />
       {/* Avatar origin is at the feet; the capsule origin is at its centre. */}
       <group ref={visualRef} position={[0, -PLAYER_HEIGHT / 2, 0]}>
-        <PlayerAvatar
-          onReady={onAvatarReady}
-          targetHeight={PLAYER_HEIGHT}
-          motionRef={motionRef}
-        />
+        {/* The avatar downloads on its own, so the body (and the camera following
+            it) work straight away; a stand-in shows until it arrives, or for good
+            if it can't be loaded. */}
+        <AvatarBoundary
+          onError={onAvatarReady}
+          fallback={<StandInBody height={PLAYER_HEIGHT} />}
+        >
+          <Suspense fallback={<StandInBody height={PLAYER_HEIGHT} />}>
+            <PlayerAvatar
+              onReady={onAvatarReady}
+              targetHeight={PLAYER_HEIGHT}
+              motionRef={motionRef}
+            />
+          </Suspense>
+        </AvatarBoundary>
       </group>
     </RigidBody>
   )
