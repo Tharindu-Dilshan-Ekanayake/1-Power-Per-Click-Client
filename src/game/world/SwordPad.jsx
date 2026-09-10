@@ -8,6 +8,7 @@ import { formatNumber } from '../format'
 import { useGame } from '../gameStore'
 import SwordModel from '../SwordModel'
 import { Label } from './Effects'
+import InteractPrompt from './InteractPrompt'
 import { radialGlowTexture, shade } from './textures'
 
 /** Pad colour: red not owned (pulsing when affordable), yellow owned, purple equipped. */
@@ -25,8 +26,8 @@ const DISPLAY_SCALE = 1.35
 
 /**
  * Shop slot: a sword standing upright on a glowing hexagon pad, with its price,
- * name and power floating above. Stepping onto the pad buys the sword, or equips
- * it if already owned.
+ * name and power floating above. Walking up to it shows an E prompt to buy the
+ * sword, or equip it if already owned.
  *
  * @param {{ sword: object, position: number[] }} props
  */
@@ -62,9 +63,22 @@ export function SwordPad({ sword, position }) {
     if (aura.current) aura.current.opacity = 0.3 + 0.12 * Math.sin(t * 2 + position[0])
   })
 
+  const inRange = useGame((s) => s.interact?.kind === 'sword' && s.interact.id === sword.id)
+
   const onEnter = ({ other }) => {
-    if (other.rigidBodyObject?.name === 'player') useGame.getState().stepOnSword(sword.id)
+    if (other.rigidBodyObject?.name === 'player') useGame.getState().setInteract('sword', sword.id)
   }
+  const onExit = ({ other }) => {
+    if (other.rigidBodyObject?.name === 'player') useGame.getState().clearInteract('sword', sword.id)
+  }
+
+  const price = sword.cost === 0 ? 'Free' : `🏆 ${formatNumber(sword.cost)} Wins`
+  const prompt = {
+    equipped: { action: 'Equipped', tone: 'done', detail: 'In your hand' },
+    owned: { action: 'Equip', tone: 'normal', detail: 'You own this sword' },
+    affordable: { action: 'Buy', tone: 'normal', detail: price },
+    locked: { action: 'Buy', tone: 'warn', detail: `${price} · not enough Wins` },
+  }[status]
 
   const color = STATUS_COLOR[status]
   const priceLine =
@@ -139,8 +153,16 @@ export function SwordPad({ sword, position }) {
         />
       </Billboard>
 
+      {inRange && <InteractPrompt position={[0, 2.2, 0]} title={sword.name} {...prompt} />}
+
       <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider sensor args={[1.3, 1, 1.3]} position={[0, 1, 0]} onIntersectionEnter={onEnter} />
+        <CuboidCollider
+          sensor
+          args={[1.7, 1, 1.7]}
+          position={[0, 1, 0]}
+          onIntersectionEnter={onEnter}
+          onIntersectionExit={onExit}
+        />
       </RigidBody>
     </group>
   )

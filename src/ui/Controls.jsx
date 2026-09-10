@@ -5,6 +5,8 @@ export function Controls() {
     ['Space', 'jump'],
     ['Shift', 'sprint'],
     ['Left-click', 'swing sword'],
+    ['E', 'buy / equip / open'],
+    ['Train pad', 'swings for you'],
     ['Right-drag', 'rotate camera'],
     ['Scroll', 'zoom'],
   ]

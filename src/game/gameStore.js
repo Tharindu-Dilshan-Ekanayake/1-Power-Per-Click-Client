@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+import { getEgg } from './eggs'
 import { formatNumber } from './format'
 import { DEFAULT_SWORD, getSword } from './swords'
 import { getTrainer, TRAINERS } from './trainers'
@@ -13,7 +14,10 @@ export const clickGain = (sword, trainer) =>
   Math.max(1, Math.round(sword.power * (trainer?.multiplier ?? 1)))
 
 const MESSAGE_MS = 2600
+/** Matches the `click-popup` animation in index.css. */
+const POPUP_MS = 1000
 let messageId = 0
+let popupId = 0
 
 /**
  * Player progress. Saved to localStorage for now; move it to the server before
@@ -34,6 +38,10 @@ export const useGame = create(
       activeTrainer: null,
       /** Yaw the player turns to while training, so they face the dummy. */
       trainYaw: Math.PI,
+      /** What the E key acts on: `{ kind: 'sword' | 'egg', id }`, or null. */
+      interact: null,
+      /** "⚔ +N" popups flying to the Power counter: `{ id, gain, x, y, dx, dy }`. */
+      popups: [],
       /** `performance.now()` seconds of the last swing; drives the arm animation. */
       swingAt: -Infinity,
       /** Power gained by the last swing, for the dummy's "+N" popup. */
@@ -49,11 +57,22 @@ export const useGame = create(
         }, MESSAGE_MS)
       },
 
-      /** One click: swing the equipped sword and gain its power, times any training. */
-      swing: () => {
-        const { equipped, activeTrainer, power } = get()
+      /**
+       * One swing of the equipped sword: gain its power, times any training. `popup`
+       * (`{ x, y, dx, dy }` in screen pixels) sends a "⚔ +N" flying from (x, y) by
+       * (dx, dy), to the Power counter.
+       */
+      swing: (popup) => {
+        const { equipped, activeTrainer, power, popups } = get()
         const gain = clickGain(getSword(equipped), getTrainer(activeTrainer))
-        set({ power: power + gain, lastGain: gain, swingAt: performance.now() / 1000 })
+        const next = { power: power + gain, lastGain: gain, swingAt: performance.now() / 1000 }
+        if (popup) {
+          const id = ++popupId
+          // Capped, so frantic clicking can't pile up hundreds of elements.
+          next.popups = [...popups.slice(-24), { ...popup, gain, id }]
+          setTimeout(() => set({ popups: get().popups.filter((p) => p.id !== id) }), POPUP_MS)
+        }
+        set(next)
       },
 
       /**
@@ -79,11 +98,33 @@ export const useGame = create(
         if (get().activeTrainer === id) set({ activeTrainer: null })
       },
 
-      /** Stepping onto a sword pad: equip it if owned, otherwise try to buy it. */
-      stepOnSword: (id) => {
+      /** A sword or egg came into E range. */
+      setInteract: (kind, id) => set({ interact: { kind, id } }),
+      /** It went out of range; ignored if something else has taken over since. */
+      clearInteract: (kind, id) => {
+        const current = get().interact
+        if (current?.kind === kind && current.id === id) set({ interact: null })
+      },
+      /** E pressed (or the prompt clicked): act on whatever is in range. */
+      interactNow: () => {
+        const target = get().interact
+        if (target?.kind === 'sword') get().pickSword(target.id)
+        else if (target?.kind === 'egg') get().openEgg(target.id)
+      },
+      /** Hatching isn't built yet, so opening an egg just says so. */
+      openEgg: (id) => {
+        const egg = getEgg(id)
+        if (egg) get().notify(`${egg.name}: hatching pets is coming soon!`)
+      },
+
+      /** E at a sword pad: equip it if owned, otherwise try to buy it. */
+      pickSword: (id) => {
         const { owned, equipped, wins, notify } = get()
         const sword = getSword(id)
-        if (equipped === id) return
+        if (equipped === id) {
+          notify(`${sword.name} is already equipped`)
+          return
+        }
         if (owned.includes(id)) {
           set({ equipped: id })
           notify(`Equipped ${sword.name}`)

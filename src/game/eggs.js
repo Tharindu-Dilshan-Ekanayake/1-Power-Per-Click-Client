@@ -16,3 +16,6 @@ export const EGGS = [
   { id: 'galaxy', name: 'Galaxy Egg', cost: 2500000, colors: ['#3b2a8a', '#ff7af5'], glow: 0.7 },
   { id: 'rainbow', name: 'Rainbow Egg', cost: 10000000, colors: ['#ff4fd8', '#7ff9ff'], glow: 0.8 },
 ]
+
+/** @returns the egg, or undefined for an unknown id. */
+export const getEgg = (id) => EGGS.find((e) => e.id === id)

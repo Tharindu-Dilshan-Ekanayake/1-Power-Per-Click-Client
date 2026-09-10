@@ -1,12 +1,12 @@
 import { Environment } from '@react-three/drei'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { Physics } from '@react-three/rapier'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
 import { useBloxity } from '../bloxity/BloxityContext'
 import FollowCamera from './FollowCamera'
-import { useGame } from './gameStore'
 import Player from './Player'
+import SwingInput from './SwingInput'
 import { SPAWN } from './world/themes'
 import World, { SunLight } from './world/World'
 
@@ -21,23 +21,6 @@ function FirstFrameSignal({ onFirstFrame }) {
     fired.current = true
     onFirstFrame()
   })
-  return null
-}
-
-/**
- * Left-click on the game view swings the sword. Right-click stays with the camera,
- * and HUD buttons sit above the canvas so they never reach this.
- */
-function AttackInput() {
-  const gl = useThree((s) => s.gl)
-  useEffect(() => {
-    const el = gl.domElement
-    const onPointerDown = (e) => {
-      if (e.button === 0) useGame.getState().swing()
-    }
-    el.addEventListener('pointerdown', onPointerDown)
-    return () => el.removeEventListener('pointerdown', onPointerDown)
-  }, [gl])
   return null
 }
 
@@ -93,7 +76,7 @@ export function GameScene() {
       </Suspense>
 
       <FollowCamera bodyRef={playerBodyRef} />
-      <AttackInput />
+      <SwingInput bodyRef={playerBodyRef} />
       <FirstFrameSignal onFirstFrame={handleFirstFrame} />
     </Canvas>
   )

@@ -7,6 +7,7 @@ import { AdditiveBlending } from 'three'
 import { formatNumber } from '../format'
 import { useGame } from '../gameStore'
 import { Label } from './Effects'
+import InteractPrompt from './InteractPrompt'
 import { radialGlowTexture, shade } from './textures'
 
 /** Voxel egg silhouette, bottom to top: [width, height, colour index]. */
@@ -60,7 +61,8 @@ function EggModel({ egg }) {
 
 /**
  * An egg spinning over a glowing round stand, with its name and price above.
- * Walking up to it shows a "coming soon" message until hatching is built.
+ * Walking up to it shows an E prompt to open it; hatching isn't built yet, so for
+ * now opening just says so.
  *
  * @param {{ egg: object, position: number[] }} props
  */
@@ -78,9 +80,13 @@ export function EggStand({ egg, position }) {
     if (aura.current) aura.current.opacity = 0.3 + 0.12 * Math.sin(t * 2 + position[2])
   })
 
+  const inRange = useGame((s) => s.interact?.kind === 'egg' && s.interact.id === egg.id)
+
   const onEnter = ({ other }) => {
-    if (other.rigidBodyObject?.name !== 'player') return
-    useGame.getState().notify(`${egg.name}: hatching pets is coming soon!`)
+    if (other.rigidBodyObject?.name === 'player') useGame.getState().setInteract('egg', egg.id)
+  }
+  const onExit = ({ other }) => {
+    if (other.rigidBodyObject?.name === 'player') useGame.getState().clearInteract('egg', egg.id)
   }
 
   return (
@@ -141,8 +147,23 @@ export function EggStand({ egg, position }) {
       <RigidBody type="fixed" colliders={false}>
         {/* Solid stand and egg, plus a wider sensor for walking up to it. */}
         <CuboidCollider args={[1.1, 1.6, 1.1]} position={[0, 1.6, 0]} />
-        <CuboidCollider sensor args={[2, 1, 2]} position={[0, 1, 0]} onIntersectionEnter={onEnter} />
+        <CuboidCollider
+          sensor
+          args={[2, 1, 2]}
+          position={[0, 1, 0]}
+          onIntersectionEnter={onEnter}
+          onIntersectionExit={onExit}
+        />
       </RigidBody>
+
+      {inRange && (
+        <InteractPrompt
+          position={[0, 1.8, 0]}
+          action="Open"
+          title={egg.name}
+          detail={`🏆 ${formatNumber(egg.cost)} Wins`}
+        />
+      )}
     </group>
   )
 }
