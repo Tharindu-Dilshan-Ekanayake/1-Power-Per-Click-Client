@@ -2,12 +2,15 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { Object3D } from 'three'
 
+import { getSword } from '../swords'
 import { Backdrop, Clouds, Crown, Crystal, GlowPad, Label, Sky } from './Effects'
+import EggStand from './EggStand'
 import { buildLayout } from './layout'
 import Portal from './Portal'
 import StageWall from './StageWall'
 import StaticBlocks from './StaticBlocks'
 import SwordPad from './SwordPad'
+import SwordStatue from './SwordStatue'
 import TrainingDummy from './TrainingDummy'
 
 /**
@@ -46,6 +49,10 @@ export function World() {
       {layout.trainerPads.map((pad) => (
         <TrainingDummy key={pad.trainer.id} {...pad} />
       ))}
+      {layout.eggStands.map((stand) => (
+        <EggStand key={stand.egg.id} {...stand} />
+      ))}
+      <SwordStatue position={layout.statue.position} sword={getSword(layout.statue.swordId)} />
     </>
   )
 }

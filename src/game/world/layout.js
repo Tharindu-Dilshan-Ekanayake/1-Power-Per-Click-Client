@@ -1,3 +1,4 @@
+import { EGGS } from '../eggs'
 import { SWORDS } from '../swords'
 import { TRAINERS } from '../trainers'
 import { mulberry32 } from './textures'
@@ -75,68 +76,146 @@ export function buildLayout() {
     box(x0, h - 0.5, z0, x1, h, z1, 'grass')
   }
 
-  const mushroom = (x, z) => {
-    box(x - 0.15, 0, z - 0.15, x + 0.15, 0.5, z + 0.15, 'stem', false)
-    box(x - 0.45, 0.5, z - 0.45, x + 0.45, 0.85, z + 0.45, 'mushroomCap', false)
-  }
-
   // --- Lobby ground ---------------------------------------------------------------
-  const outer = LOBBY_HALF + RING * 3
-  box(-outer, -1, STAGE_START, outer, 0, outer, 'path')
-
-  // Four grass lawns with brown kerbs, leaving a cross of path between them.
-  // Visual only: they sit a hair above the path, so there is nothing to trip on.
-  const lawnLo = 6
-  const lawnHi = LOBBY_HALF - 6
-  const lawns = []
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) {
-      const [x0, x1] = sx > 0 ? [lawnLo, lawnHi] : [-lawnHi, -lawnLo]
-      const [z0, z1] = sz > 0 ? [lawnLo, lawnHi] : [-lawnHi, -lawnLo]
-      lawns.push({ x0, x1, z0, z1, sx, sz })
-      box(x0, 0, z0, x1, 0.06, z1, 'grass', false)
-      const k = 0.6
-      box(x0 - k, 0, z0 - k, x1 + k, 0.12, z0, 'border', false)
-      box(x0 - k, 0, z1, x1 + k, 0.12, z1 + k, 'border', false)
-      box(x0 - k, 0, z0, x0, 0.12, z1, 'border', false)
-      box(x1, 0, z0, x1 + k, 0.12, z1, 'border', false)
-    }
-  }
-
-  // Lawn dressing: just mushrooms. The lawns stay open, so the shop and training rows
-  // along the side walls are visible from anywhere in the plaza.
-  for (const { x0, x1, z0, z1 } of lawns) {
-    for (let i = 0; i < 6; i++) {
-      mushroom(x0 + 2 + rand() * (x1 - x0 - 4), z0 + 2 + rand() * (z1 - z0 - 4))
-    }
-  }
-
-  // A small jump course of coloured pillars on the south-east lawn, ending on a high
-  // platform.
-  const course = [
-    [10, -10, 1.2, 'red'],
-    [13.5, -13, 2.2, 'yellow'],
-    [17, -16, 3.2, 'blue'],
-    [20.5, -19, 4.2, 'purple'],
-    [24, -22, 5.2, 'green'],
-  ]
-  for (const [x, z, h, m] of course) box(x - 1.25, 0, z - 1.25, x + 1.25, h, z + 1.25, m)
-  box(21, 0, -27.5, 25, 6.2, -24.5, 'orange')
-  crystals.push({ position: [23, 6.2, -26], color: '#ffd23f', scale: 1.1 })
-
-  // --- Sword shop (west wall) and training area (east wall) --------------------------
-  // Each row runs along a side wall of the lobby and faces into the plaza, with
-  // checkered billboards on tall posts against the terraces behind. The cheapest item
-  // is at the spawn (north) end.
-  // Swords stand in two staggered rows: the first ten on the ground in front, the rest
-  // (bigger and pricier) on a raised ledge behind, offset half a step so each sign
-  // sits in a gap of the row in front.
+  // Grass everywhere, with tan walkways and three themed zones laid on top: swords on
+  // the west side, training (north) and eggs (south) on the east. Paths and zone
+  // floors are visual only, a hair above the grass, so there is nothing to trip on.
   const L = LOBBY_HALF
+  const outer = L + RING * 3
+  box(-outer, -1, STAGE_START, outer, 0, outer, 'grass')
+
+  const path = (x0, z0, x1, z1) => box(x0, 0, z0, x1, 0.05, z1, 'path', false)
+  const kerb = (x0, z0, x1, z1) => box(x0, 0, z0, x1, 0.12, z1, 'border', false)
+
+  // Walkways: the main avenue from the north plaza to the gate (and on through its
+  // tunnel), the plaza itself, and a cross path between the training and egg zones.
+  const AVENUE = 5
+  const K = AVENUE + 0.5
+  const PLAZA_Z = L - 10
+  const CROSS0 = -5
+  const CROSS1 = 1
+  path(-AVENUE, STAGE_START, AVENUE, PLAZA_Z)
+  path(-L, PLAZA_Z, L, L)
+  path(AVENUE, CROSS0, L, CROSS1)
+  kerb(-K, GATE_Z, -AVENUE, PLAZA_Z)
+  kerb(AVENUE, GATE_Z, K, CROSS0)
+  kerb(AVENUE, CROSS1, K, PLAZA_Z)
+  kerb(K, CROSS0 - 0.5, L, CROSS0)
+  kerb(K, CROSS1, L, CROSS1 + 0.5)
+  kerb(-L, PLAZA_Z - 0.5, -K, PLAZA_Z)
+  kerb(K, PLAZA_Z - 0.5, L, PLAZA_Z)
+
+  /** Lamp post with a glowing lantern, lining the walkways. */
+  const lamp = (x, z) => {
+    box(x - 0.15, 0, z - 0.15, x + 0.15, 3.6, z + 0.15, 'dark')
+    box(x - 0.35, 3.6, z - 0.35, x + 0.35, 4.3, z + 0.35, 'neon:#fff1b8', false)
+    box(x - 0.45, 4.3, z - 0.45, x + 0.45, 4.45, z + 0.45, 'dark', false)
+  }
+  // Placed clear of the zone entrances and the cross path.
+  for (const z of [-26, -14, 8, 20]) lamp(-AVENUE - 1.2, z)
+  for (const z of [-27, -11, 5, 20]) lamp(AVENUE + 1.2, z)
+  for (const x of [13, 27]) {
+    lamp(x, CROSS0 - 1.2)
+    lamp(x, CROSS1 + 1.2)
+  }
+
+  /**
+   * Low fence along an axis-aligned line, with gaps for entrances. `axis` is the
+   * direction it runs ('x' or 'z'), `at` its fixed coordinate, `gaps` sorted
+   * [from, to] ranges to leave open. One jump high, so it never traps anyone.
+   */
+  const fence = (axis, at, from, to, gaps, rail, post) => {
+    const pieces = []
+    let s = from
+    for (const [g0, g1] of gaps) {
+      if (g0 > s) pieces.push([s, g0])
+      s = Math.max(s, g1)
+    }
+    if (s < to) pieces.push([s, to])
+    const put = (a0, a1, y0, y1, t, m) =>
+      axis === 'x' ? box(a0, y0, at - t, a1, y1, at + t, m) : box(at - t, y0, a0, at + t, y1, a1, m)
+    for (const [a, b] of pieces) {
+      put(a, b, 0.75, 0.95, 0.1, rail)
+      put(a, b, 0.35, 0.5, 0.08, rail)
+      const n = Math.max(1, Math.round((b - a) / 2.2))
+      for (let k = 0; k <= n; k++) {
+        const c = a + ((b - a) * k) / n
+        put(c - 0.18, c + 0.18, 0, 1.1, 0.18, post)
+      }
+    }
+  }
+
+  /**
+   * Entrance arch in a fence that runs along Z at x = `at`, with the zone's name on a
+   * board across the top. `dir` is the way it faces (+1 = +X, -1 = -X).
+   */
+  const archGate = (at, center, width, dir, zone) => {
+    const z0 = center - width / 2
+    const z1 = center + width / 2
+    box(at - 0.4, 0, z0 - 0.8, at + 0.4, 5.8, z0, zone.post)
+    box(at - 0.4, 0, z1, at + 0.4, 5.8, z1 + 0.8, zone.post)
+    box(at - 0.4, 5, z0, at + 0.4, 5.8, z1, zone.post)
+    box(at - 0.42, 4.8, z0, at + 0.42, 5, z1, `neon:${zone.neon}`, false)
+    box(at - 0.2, 5.8, z0 - 0.5, at + 0.2, 7.8, z1 + 0.5, zone.board)
+    labels.push({
+      lines: [zone.title],
+      position: [at + dir * 0.22, 6.8, center],
+      rotationY: (dir * Math.PI) / 2,
+      size: [width + 0.4, 1.6],
+      style: { fill: zone.fill },
+    })
+  }
+
+  // Each zone has its own colours: floor, fence, arch and billboards.
+  const ZONES = {
+    swords: {
+      x0: -L + 1, x1: -7, z0: GATE_Z + 4, z1: PLAZA_Z - 2,
+      floor: 'floor:#9cc2ff,#86b1f7', rail: 'floor:#3d7be8,#3d7be8', post: 'floor:#23479a,#23479a',
+      board: 'floor:#3d7be8,#2f68d0', neon: '#6fb8ff', title: 'SWORDS', fill: ['#ffffff', '#cfe6ff'],
+    },
+    train: {
+      x0: 7, x1: L - 1, z0: CROSS1 + 2, z1: PLAZA_Z - 2,
+      floor: 'floor:#ffd494,#ffc477', rail: 'floor:#ff9f1c,#ff9f1c', post: 'floor:#a85a00,#a85a00',
+      board: 'floor:#ff9f1c,#f08a0a', neon: '#ffd166', title: 'TRAIN', fill: ['#fff6a8', '#ffc21a'],
+    },
+    eggs: {
+      x0: 7, x1: L - 1, z0: GATE_Z + 4, z1: CROSS0 - 2,
+      floor: 'floor:#ffc2e6,#ffadd9', rail: 'floor:#ff5fb8,#ff5fb8', post: 'floor:#a8286e,#a8286e',
+      board: 'floor:#ff5fb8,#e64aa0', neon: '#ff8fd0', title: 'EGGS', fill: ['#ffffff', '#ffd6ee'],
+    },
+  }
+  const ENTRANCE = 7
+  const midZ = (zone) => (zone.z0 + zone.z1) / 2
+  /** Plain opening onto the plaza or the cross path. */
+  const SIDE_GAP = [17, 23]
+
+  for (const [name, zone] of Object.entries(ZONES)) {
+    const { x0, x1, z0, z1 } = zone
+    box(x0, 0, z0, x1, 0.06, z1, zone.floor, false)
+
+    // The arch faces the avenue; the side walls of the lobby need no fence.
+    const west = name === 'swords'
+    const inner = west ? x1 : x0
+    const c = midZ(zone)
+    fence('z', inner, z0, z1, [[c - ENTRANCE / 2 - 0.8, c + ENTRANCE / 2 + 0.8]], zone.rail, zone.post)
+    archGate(inner, c, ENTRANCE, west ? 1 : -1, zone)
+
+    const northGaps = west ? [[-23, -17]] : [SIDE_GAP]
+    const southGaps = name === 'train' ? [SIDE_GAP] : []
+    fence('x', z1, x0, x1, northGaps, zone.rail, zone.post)
+    fence('x', z0, x0, x1, southGaps, zone.rail, zone.post)
+  }
+
+  // --- Sword zone ------------------------------------------------------------------
+  // Two staggered rows along the west wall: the first ten on the ground, the bigger,
+  // pricier ones on a ledge behind, half a step along so each sign shows through a
+  // gap. A giant sword statue stands in the middle of the zone.
+  const SWORD_Z = midZ(ZONES.swords)
   const SWORD_STEP = 3.9
   const FRONT_COUNT = 10
   const LEDGE_H = 1.2
-  // Both rows are centred on the wall.
-  const frontStart = ((FRONT_COUNT - 1) * SWORD_STEP) / 2
+  const rowHalf = ((FRONT_COUNT - 1) * SWORD_STEP) / 2
+  const frontStart = SWORD_Z + rowHalf
   const swordPads = SWORDS.map((sword, i) => {
     const back = i >= FRONT_COUNT
     const slot = back ? i - FRONT_COUNT : i
@@ -148,16 +227,50 @@ export function buildLayout() {
     }
   })
   // The ledge is one easy jump high.
-  hill(-L, -frontStart - 2.5, -(L - 4.4), frontStart + 2.5, LEDGE_H)
+  hill(-L, SWORD_Z - rowHalf - 2.5, -(L - 4.4), SWORD_Z + rowHalf + 2.5, LEDGE_H)
 
-  // Training pads are turned to face -X, which puts each dummy (DUMMY_OFFSET_Z in the
+  const STATUE_X = -17
+  box(STATUE_X - 2, 0, SWORD_Z - 2, STATUE_X + 2, 1.2, SWORD_Z + 2, 'portalStone')
+  box(STATUE_X - 1.2, 1.2, SWORD_Z - 1.2, STATUE_X + 1.2, 1.8, SWORD_Z + 1.2, 'portalStone')
+  const statue = { position: [STATUE_X, 1.8, SWORD_Z], swordId: 'diamond' }
+  for (const [dx, dz] of [[-2.6, 1.8], [2.4, -2.2], [1.8, 2.6]]) {
+    crystals.push({ position: [STATUE_X + dx, 0, SWORD_Z + dz], color: '#7fdcff', scale: 0.8 })
+  }
+
+  // --- Training zone ---------------------------------------------------------------
+  // Two rows of four facing the avenue, the pricier row along the wall with its signs
+  // raised. Pads are turned to face -X, which puts each dummy (DUMMY_OFFSET_Z in the
   // pad's own frame) on the wall side of its pad.
-  const TRAINER_STEP = 4.2
-  const trainerPads = TRAINERS.map((trainer, i) => ({
-    trainer,
-    position: [L - 5.2, 0, ((TRAINERS.length - 1) * TRAINER_STEP) / 2 - i * TRAINER_STEP],
-    rotationY: -Math.PI / 2,
-  }))
+  const TRAIN_Z = midZ(ZONES.train)
+  const TRAINER_STEP = 4
+  const PER_ROW = 4
+  const trainerPads = TRAINERS.map((trainer, i) => {
+    const front = i < PER_ROW
+    const slot = front ? i : i - PER_ROW
+    return {
+      trainer,
+      position: [front ? L - 13.2 : L - 5.2, 0, TRAIN_Z + (front ? 4.5 : 6.5) - slot * TRAINER_STEP],
+      rotationY: -Math.PI / 2,
+      labelY: front ? 4.9 : 6.4,
+    }
+  })
+
+  // --- Egg zone --------------------------------------------------------------------
+  // Two rows of four, the pricier row on a ledge along the wall.
+  const EGG_Z = midZ(ZONES.eggs)
+  const EGG_STEP = 4.5
+  const eggStands = EGGS.map((egg, i) => {
+    const front = i < PER_ROW
+    const slot = front ? i : i - PER_ROW
+    const rowTop = EGG_Z + 6.75
+    return {
+      egg,
+      position: front
+        ? [L - 12, 0, rowTop - EGG_STEP / 2 - slot * EGG_STEP]
+        : [L - 4, LEDGE_H, rowTop - slot * EGG_STEP],
+    }
+  })
+  hill(L - 8, EGG_Z - 9, L, EGG_Z + 9, LEDGE_H)
 
   /**
    * Checkered billboard on two tall black posts, standing against a side wall.
@@ -187,17 +300,16 @@ export function buildLayout() {
     })
   }
 
-  // [centre z, is the big middle board]
-  // Raised clear of the back row's signs, which top out a little above y = 8.
-  const swordBoards = [[12, false], [0, true], [-12, false]]
-  for (const [cz, big] of swordBoards) {
-    sideBillboard(-(L - 0.6), 1, cz, big ? 9.2 : 8.4, big ? 11 : 9, big ? 4 : 3.5,
-      'floor:#3d7be8,#2f68d0', 'SWORDS', ['#ffffff', '#cfe6ff'])
+  // Billboards against the side walls, raised clear of the signs in front of them.
+  const WALL_FACE = L - 0.6
+  // [offset from the zone centre, is the big middle board]
+  for (const [dz, big] of [[12, false], [0, true], [-12, false]]) {
+    sideBillboard(-WALL_FACE, 1, SWORD_Z + dz, big ? 9.2 : 8.4, big ? 11 : 9, big ? 4 : 3.5,
+      ZONES.swords.board, 'SWORDS', ZONES.swords.fill)
   }
-  const trainBoards = [[12, false], [0, true], [-12, false]]
-  for (const [cz, big] of trainBoards) {
-    sideBillboard(L - 0.6, -1, cz, big ? 8 : 7.2, big ? 11 : 9, big ? 4 : 3.5,
-      'floor:#ff9f1c,#f08a0a', 'TRAIN', ['#fff6a8', '#ffc21a'])
+  for (const dz of [5, -5]) {
+    sideBillboard(WALL_FACE, -1, TRAIN_Z + dz, 7.6, 8, 3.4, ZONES.train.board, 'TRAIN', ZONES.train.fill)
+    sideBillboard(WALL_FACE, -1, EGG_Z + dz * 1.1, 8, 8, 3.4, ZONES.eggs.board, 'EGGS', ZONES.eggs.fill)
   }
 
   // --- Terraces around the lobby --------------------------------------------------
@@ -409,5 +521,17 @@ export function buildLayout() {
     style: { bg: '#6b4424', border: '#4a2c14' },
   })
 
-  return { blocks, walls, portals, pads, crowns, crystals, labels, swordPads, trainerPads }
+  return {
+    blocks,
+    walls,
+    portals,
+    pads,
+    crowns,
+    crystals,
+    labels,
+    swordPads,
+    trainerPads,
+    eggStands,
+    statue,
+  }
 }
