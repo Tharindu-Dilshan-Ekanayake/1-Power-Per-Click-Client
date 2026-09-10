@@ -22,8 +22,12 @@ const ZOOM_SENSITIVITY = 0.01
 const POSITION_SMOOTHING = 4
 const LOOK_SMOOTHING = 8
 
+/** A jump bigger than this in one frame is a teleport: snap instead of easing. */
+const TELEPORT_DISTANCE = 15
+
 const _desired = new Vector3()
 const _target = new Vector3()
+const _lastTarget = new Vector3()
 
 /**
  * Third-person orbit camera.
@@ -127,8 +131,11 @@ export function FollowCamera({ bodyRef }) {
       _target.z + Math.cos(yaw) * horizontal,
     )
 
-    if (!initialised.current) {
-      // Avoid a long swoop in from wherever the default camera started.
+    const teleported = _lastTarget.distanceTo(_target) > TELEPORT_DISTANCE
+    _lastTarget.copy(_target)
+
+    if (!initialised.current || teleported) {
+      // Avoid a long swoop in from wherever the camera was (startup, or a portal).
       camera.position.copy(_desired)
       lookAt.current.copy(_target).setY(_target.y + LOOK_HEIGHT)
       initialised.current = true

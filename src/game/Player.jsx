@@ -14,7 +14,14 @@ const PLAYER_HEIGHT = 2 * (CAPSULE_HALF_HEIGHT + CAPSULE_RADIUS)
 
 const MOVE_SPEED = 6
 const SPRINT_MULTIPLIER = 1.6
-const JUMP_IMPULSE = 5.2
+/**
+ * Upward speed set on jump. Set directly rather than applied as an impulse so the
+ * height doesn't depend on the collider's mass: v²/2g ≈ 1.6 units at gravity 18,
+ * enough to hop onto the 1.2-unit terrace steps.
+ */
+const JUMP_VELOCITY = 7.6
+/** Falling below this puts the player back at their spawn point. */
+const FALL_LIMIT_Y = -25
 /** Extra ray length past the capsule bottom; tolerates small ground gaps. */
 const GROUND_RAY_SLACK = 0.15
 /** Stops one long Space press from re-triggering the moment the ray re-hits. */
@@ -144,8 +151,14 @@ export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalB
 
     // --- Jump --------------------------------------------------------------------
     if (k.jump && jumpCooldown.current === 0 && grounded) {
-      body.applyImpulse({ x: 0, y: JUMP_IMPULSE, z: 0 }, true)
+      const v = body.linvel()
+      body.setLinvel({ x: v.x, y: JUMP_VELOCITY, z: v.z }, true)
       jumpCooldown.current = JUMP_COOLDOWN_S
+    }
+
+    if (body.translation().y < FALL_LIMIT_Y) {
+      body.setTranslation({ x: position[0], y: position[1], z: position[2] }, true)
+      body.setLinvel({ x: 0, y: 0, z: 0 }, true)
     }
 
     // --- Publish motion state for the avatar's pose -------------------------------
