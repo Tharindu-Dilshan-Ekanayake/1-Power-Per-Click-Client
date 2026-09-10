@@ -450,7 +450,11 @@ export function buildLayout() {
         box(na, 0, za, nb, 0.25, zb, `neon:${theme.neon}`, false)
         box(na, WALL_H - 0.6, za, nb, WALL_H - 0.4, zb, `neon:${theme.neon}`, false)
       })
-      if (opening) box(xa, 8, opening[0], xb, WALL_H, opening[1], `panel:${theme.side}`)
+      // Wall over the door into the side room, and a floor under it: the door is cut
+      // through the whole thickness of the side wall, which would otherwise leave a
+      // hole between the corridor floor and the room's.
+      box(xa, 8, opening[0], xb, WALL_H, opening[1], `panel:${theme.side}`)
+      box(xa, -1, opening[0], xb, 0, opening[1], `floor:${theme.floor.join(',')}`)
       box(xa - 0.2, WALL_H, z1, xb + 0.2, WALL_H + 0.6, z0, 'dark')
 
       // Terrain beyond the corridor walls, so it reads as a canyon from above.
