@@ -1,5 +1,5 @@
 import { useGLTF } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { createPortal, useFrame } from '@react-three/fiber'
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
 import { Box3, MeshStandardMaterial, Vector3 } from 'three'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
@@ -19,8 +19,18 @@ import {
   applyProportions,
   applySkin,
   attachAccessory,
+  attachHandHolder,
   collectRig,
+  placeHandHolder,
 } from './avatarRig'
+import { useGame } from './gameStore'
+import SwordModel from './SwordModel'
+import { getSword } from './swords'
+
+/** Held sword size relative to its shop model. */
+const HELD_SCALE = 0.75
+/** Blade points forward (+Z) and tilted up a little, rather than straight up. */
+const HELD_ROTATION = [Math.PI / 2 - 0.35, 0, 0]
 
 /**
  * Keeps the avatar breathing when it is rendered outside the game (a menu preview,
@@ -82,6 +92,10 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
     }
     return collected
   }, [character])
+
+  // Empty object on the forearm bone; the equipped sword is portalled into it.
+  const hand = useMemo(() => attachHandHolder(rig), [rig])
+  const sword = getSword(useGame((s) => s.equipped))
 
   // Measured once, from the bind pose, before proportions touch the root scale.
   const fit = useMemo(() => {
@@ -169,6 +183,9 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
           }
         }
 
+        // The arm part may have just changed shape, so re-find the palm.
+        if (hand) placeHandHolder(rig, hand)
+
         setAssembled(true)
       })
       .catch((err) => {
@@ -183,7 +200,7 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
         object.traverse((child) => child.geometry?.dispose())
       }
     }
-  }, [rig, equipped, game])
+  }, [rig, hand, equipped, game])
 
   // --- Proportions -------------------------------------------------------------
   // Applied per frame rather than in an effect: every bone is reset to its rest pose
@@ -215,6 +232,15 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
       <group scale={fit.scale} position={[0, fit.footOffset, 0]}>
         <primitive object={character} />
       </group>
+      {/* The holder lives in the rig's native units; undo the fit scale so the sword
+          is authored in world units like everything else. */}
+      {hand &&
+        createPortal(
+          <group scale={HELD_SCALE / fit.scale} rotation={HELD_ROTATION}>
+            <SwordModel sword={sword} />
+          </group>,
+          hand,
+        )}
     </group>
   )
 })

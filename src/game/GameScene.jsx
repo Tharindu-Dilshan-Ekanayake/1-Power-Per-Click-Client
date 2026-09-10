@@ -5,8 +5,10 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
 import { useBloxity } from '../bloxity/BloxityContext'
 import FollowCamera from './FollowCamera'
-import Ground from './Ground'
 import Player from './Player'
+import SwingInput from './SwingInput'
+import { SPAWN } from './world/themes'
+import World, { SunLight } from './world/World'
 
 /**
  * Fires `onFirstFrame` after the renderer has actually drawn once.
@@ -54,30 +56,27 @@ export function GameScene() {
   return (
     <Canvas
       shadows
-      camera={{ position: [0, 5, 10], fov: 60 }}
-      onCreated={({ gl }) => gl.setClearColor('#87ceeb')}
+      camera={{ position: [0, 5, 40], fov: 60, far: 1200 }}
+      onCreated={({ gl }) => gl.setClearColor('#bfe4ff')}
     >
-      <hemisphereLight args={['#bfe3ff', '#3f5d3f', 0.8]} />
-      <directionalLight
-        castShadow
-        position={[10, 20, 10]}
-        intensity={1.8}
-        shadow-mapSize={[2048, 2048]}
-      />
+      <fog attach="fog" args={['#cfeaff', 140, 420]} />
+      <hemisphereLight args={['#d6ecff', '#6b8f5a', 0.7]} />
+      <SunLight bodyRef={playerBodyRef} />
 
       <Suspense fallback={null}>
-        <Environment preset="city" />
+        <Environment preset="city" environmentIntensity={0.35} />
         <Physics gravity={[0, -18, 0]}>
-          <Ground />
+          <World bodyRef={playerBodyRef} />
           <Player
             bodyRef={playerBodyRef}
-            position={[0, 3, 8]}
+            position={SPAWN}
             onAvatarReady={handleAvatarReady}
           />
         </Physics>
       </Suspense>
 
       <FollowCamera bodyRef={playerBodyRef} />
+      <SwingInput bodyRef={playerBodyRef} />
       <FirstFrameSignal onFirstFrame={handleFirstFrame} />
     </Canvas>
   )
