@@ -6,7 +6,9 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useBloxity } from '../bloxity/BloxityContext'
 import FollowCamera from './FollowCamera'
 import { useLoading } from './loadingStore'
+import NetSync from './NetSync'
 import Player from './Player'
+import RemotePlayers from './RemotePlayers'
 import SwingInput from './SwingInput'
 import { SPAWN } from './world/themes'
 import World, { SunLight } from './world/World'
@@ -117,6 +119,9 @@ export function GameScene() {
             position={SPAWN}
             onAvatarReady={handleAvatarReady}
           />
+          {/* The other players in our lobby, and sending ours (after each physics step). */}
+          <RemotePlayers />
+          <NetSync bodyRef={playerBodyRef} />
         </Physics>
       </Suspense>
 

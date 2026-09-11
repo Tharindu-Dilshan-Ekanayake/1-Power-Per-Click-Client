@@ -25,7 +25,7 @@ const SPRINT_MULTIPLIER = 1.6
  */
 const JUMP_VELOCITY = 7.6
 /** Length of one sword swing animation. */
-const SWING_DURATION_S = 0.35
+export const SWING_DURATION_S = 0.35
 /** Falling below this puts the player back at their spawn point. */
 const FALL_LIMIT_Y = -25
 /** Extra ray length past the capsule bottom; tolerates small ground gaps. */

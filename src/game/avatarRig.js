@@ -433,6 +433,15 @@ function poseLocomotion(rig, motion) {
   const { time = 0, speed = 0, grounded = true, maxSpeed = 6 } = motion
   const ratio = Math.min(speed / Math.max(maxSpeed, 0.001), 1)
 
+  // Step frequency rises with speed so a sprint doesn't look like a moonwalk. The
+  // phase is advanced by each frame's time step, not computed as time x frequency:
+  // with that, any wobble in speed (there's always some in another player's
+  // playback) shifts the phase by the *whole* elapsed time x the change, so the
+  // legs flicker to random poses every frame.
+  const dt = rig.cycleTime === undefined ? 0 : Math.min(Math.max(time - rig.cycleTime, 0), 0.1)
+  rig.cycleTime = time
+  rig.cyclePhase = ((rig.cyclePhase ?? 0) + dt * (5 + ratio * 5)) % (Math.PI * 2)
+
   rig.root.position.y = rig.rootRestY
 
   // --- Airborne: tuck the legs, throw the arms up ---------------------------
@@ -458,8 +467,7 @@ function poseLocomotion(rig, motion) {
   }
 
   // --- Walk / run cycle -----------------------------------------------------
-  // Step frequency rises with speed so a sprint doesn't look like a moonwalk.
-  const phase = time * (5 + ratio * 5)
+  const phase = rig.cyclePhase
   const cycle = Math.sin(phase)
   const legAmp = 0.85 * ratio
   const armAmp = 0.7 * ratio
