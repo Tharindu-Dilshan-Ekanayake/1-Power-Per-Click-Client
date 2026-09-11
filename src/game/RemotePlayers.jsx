@@ -5,6 +5,7 @@ import { Quaternion, Vector3 } from 'three'
 
 import { remoteStates, useLobby } from '../net/lobbyClient'
 import { playTrack } from '../net/snapshots'
+import { playSound } from './sound'
 import { AvatarBoundary, StandInBody } from './AvatarBoundary'
 import { PLAYER_HEIGHT, SWING_DURATION_S } from './Player'
 import PlayerAvatar from './PlayerAvatar'
@@ -13,6 +14,8 @@ import { Label } from './world/Effects'
 const _quat = new Quaternion()
 const _up = new Vector3(0, 1, 0)
 const _sample = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 }
+/** Other players' swings can be heard up to this far from the camera. */
+const HEAR_DISTANCE = 25
 
 /**
  * Another player in our lobby, played back smoothly from the positions they send:
@@ -29,7 +32,7 @@ function RemotePlayer({ id, player }) {
   const motion = useRef({ time: 0, speed: 0, grounded: true, maxSpeed: 5.5, swing: Infinity })
   const swing = useRef({ sw: null, at: -Infinity })
 
-  useFrame((_state, delta) => {
+  useFrame((state, delta) => {
     const track = remoteStates.get(id)
     const group = body.current
     if (!track || !group) return
@@ -51,7 +54,12 @@ function RemotePlayer({ id, player }) {
     // A new swing count means they just swung.
     const sw = swing.current
     if (track.sw !== sw.sw) {
-      if (sw.sw !== null) sw.at = now / 1000
+      if (sw.sw !== null) {
+        sw.at = now / 1000
+        // Heard when they're close, fading out with distance.
+        const distance = state.camera.position.distanceTo(group.position)
+        if (distance < HEAR_DISTANCE) playSound('swing', { gain: 0.5 * (1 - distance / HEAR_DISTANCE) })
+      }
       sw.sw = track.sw
     }
     m.swing = (now / 1000 - sw.at) / SWING_DURATION_S

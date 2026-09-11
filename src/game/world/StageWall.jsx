@@ -5,6 +5,7 @@ import { AdditiveBlending, Color, DoubleSide, Euler, Matrix4, Quaternion, Vector
 
 import { formatNumber } from '../format'
 import { useGame } from '../gameStore'
+import { playSound } from '../sound'
 import { WALL_REGEN, wallHp } from '../walls'
 import {
   createDynamicLabel,
@@ -195,10 +196,14 @@ export function StageWall({ number, stage, theme, zFront }) {
           s.hp = 0
           s.broken = true
           spawnDebris(s, now, DEBRIS_COUNT - 8, true)
+          playSound('wallBreak')
           game.breakWall(number)
-        } else if (damage < maxHp * WEAK_HIT && now - s.warnedAt > 2) {
-          s.warnedAt = now
-          game.notify(`Wall ${number} is too strong! Get about ${formatNumber(Math.ceil(maxHp * WEAK_HIT))} Power`, 'error')
+        } else {
+          playSound('wallHit', { strength: Math.min(1, (damage / maxHp) * 4) })
+          if (damage < maxHp * WEAK_HIT && now - s.warnedAt > 2) {
+            s.warnedAt = now
+            game.notify(`Wall ${number} is too strong! Get about ${formatNumber(Math.ceil(maxHp * WEAK_HIT))} Power`, 'error')
+          }
         }
       }
     }

@@ -32,6 +32,8 @@ import { getSword } from './swords'
 const HELD_SCALE = 0.75
 /** Blade points forward (+Z) and tilted up a little, rather than straight up. */
 const HELD_ROTATION = [Math.PI / 2 - 0.35, 0, 0]
+/** The held sword always glows a little, even a plain one with no glow of its own. */
+const HELD_MIN_GLOW = 0.28
 
 /**
  * Keeps the avatar breathing when it is rendered outside the game (a menu preview,
@@ -113,6 +115,8 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
   const hand = useMemo(() => attachHandHolder(rig), [rig])
   const ownSword = useGame((s) => s.equipped)
   const sword = getSword(remote ? swordId : ownSword)
+  /** 0-1, brightest right on impact, fading through the swing; read by SwordModel. */
+  const swordFlash = useRef(0)
 
   // Measured once, from the bind pose, before proportions touch the root scale.
   const fit = useMemo(() => {
@@ -232,7 +236,12 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
       // Order matters: proportions reset every bone to its rest pose, and the
       // animation then rotates on top of that clean base.
       applyProportions(rig, proportionsRef.current)
-      animateRig(rig, motionRef?.current ?? fallbackMotion(delta))
+      const motion = motionRef?.current ?? fallbackMotion(delta)
+      animateRig(rig, motion)
+      // `swing` counts up from 0 (the instant of a hit) to 1 (the animation's end);
+      // ease the flash out over that same window so it lands exactly on the swing.
+      const sw = motion.swing
+      swordFlash.current = sw !== undefined && sw >= 0 && sw < 1 ? (1 - sw) ** 1.5 : 0
     } catch {
       // A malformed payload must not kill the render loop.
     }
@@ -255,7 +264,7 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
       {hand &&
         createPortal(
           <group scale={HELD_SCALE / fit.scale} rotation={HELD_ROTATION}>
-            <SwordModel sword={sword} />
+            <SwordModel sword={sword} minGlow={HELD_MIN_GLOW} flashRef={swordFlash} />
           </group>,
           hand,
         )}

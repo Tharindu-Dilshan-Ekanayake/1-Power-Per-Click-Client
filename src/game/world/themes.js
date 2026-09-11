@@ -140,6 +140,47 @@ export const THEMES = [
     side: '#5a8ad0',
     neon: '#7ff9ff',
   },
+  {
+    name: 'Coral',
+    wall: { style: 'bricks', palette: ['#ff6f91', '#ff8fa3', '#ff4d6d', '#ffb3c1'], gap: '#7a1f3d' },
+    side: '#ff8fa3',
+    neon: '#ff4d6d',
+    floor: ['#ffe3ea', '#ffc2d1'],
+  },
+  {
+    name: 'Toxic',
+    wall: { style: 'crystal', palette: ['#aaff00', '#c6ff33', '#7acc00', '#e2ff80'], gap: '#2f4d0a', glow: 0.5 },
+    side: '#7acc00',
+    neon: '#c6ff33',
+  },
+  {
+    name: 'Blood Moon',
+    wall: { style: 'stones', palette: ['#5c0a0a', '#7a1414', '#4a0808', '#8f1f1f'], gap: '#1a0202', glow: 0.3 },
+    side: '#7a1414',
+    neon: '#ff3b3b',
+    floor: ['#2a1010', '#1a0808'],
+  },
+  {
+    name: 'Tundra',
+    wall: { style: 'cobble', palette: ['#8fd0ff', '#6bb8f0', '#a6e0ff', '#5aa7d6'], gap: '#3a6a8a', glow: 0.3 },
+    side: '#5a8ad0',
+    neon: '#8fd0ff',
+    floor: ['#d8f0ff', '#b8e0f5'],
+  },
+  {
+    name: 'Ash Volcano',
+    wall: { style: 'lava', palette: ['#4a2020', '#6a2a1a', '#3a1515', '#8a3a20'], gap: '#1a0808', glow: 0.8 },
+    side: '#5a3030',
+    neon: '#ff5a2e',
+    floor: ['#3a3538', '#2a2528'],
+  },
+  {
+    name: 'Celestial',
+    wall: { style: 'crystal', palette: ['#ff7af5', '#7ff9ff', '#ffe94a', '#b65cff'], gap: '#ffffff', glow: 0.9 },
+    side: '#8a5ac8',
+    neon: '#ff7af5',
+    floor: ['#e8d8ff', '#d0b8f0'],
+  },
 ].map((theme) => ({ floor: DEFAULT_FLOOR, ...theme }))
 
 export const STAGE_COUNT = THEMES.length

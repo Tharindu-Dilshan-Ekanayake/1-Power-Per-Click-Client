@@ -5,11 +5,12 @@ export function Controls() {
     ['Space', 'jump'],
     ['Shift', 'sprint'],
     ['Left-click', 'swing sword / hit walls'],
-    ['E', 'buy / equip / open'],
+    ['E', 'buy / unlock / equip / open'],
     ['Train pad', 'swings for you'],
     ['Hold E', 'cash in at a Win pad'],
     ['Right-drag', 'rotate camera'],
     ['Scroll', 'zoom'],
+    ['M', 'sound on / off'],
   ]
 
   return (

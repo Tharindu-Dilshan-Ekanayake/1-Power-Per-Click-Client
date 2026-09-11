@@ -467,7 +467,8 @@ function poseLocomotion(rig, motion) {
   }
 
   // --- Walk / run cycle -----------------------------------------------------
-  const phase = rig.cyclePhase
+  // The local player supplies its own phase, which its footstep sounds follow.
+  const phase = motion.phase ?? rig.cyclePhase
   const cycle = Math.sin(phase)
   const legAmp = 0.85 * ratio
   const armAmp = 0.7 * ratio

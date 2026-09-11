@@ -14,10 +14,11 @@ const OUTLINE = {
 const ICON_SHADOW = { filter: 'drop-shadow(0 3px 0 rgba(0,0,0,0.85))' }
 const INK = '#1b1b25'
 
-const TONE = {
-  success: 'text-lime-300',
-  error: 'text-red-400',
-  info: 'text-white',
+/** Toast notice styling per tone: card border, icon gradient, text colour. */
+const NOTICE = {
+  success: { border: '#7dff6a', icon: ['#eaffd8', '#5fe64c'], text: 'text-lime-200' },
+  error: { border: '#ff5a5a', icon: ['#ffdede', '#ff5a5a'], text: 'text-red-200' },
+  info: { border: '#7fd8ff', icon: ['#eaf9ff', '#5cc4ff'], text: 'text-sky-100' },
 }
 
 /** Button faces for the x2 / x4 / x8 boosts: gold, orange, red. */
@@ -97,6 +98,52 @@ function CursorIcon({ rainbow, className }) {
         strokeWidth="6"
         strokeLinejoin="round"
       />
+    </svg>
+  )
+}
+
+/** Check / warning-triangle / info-circle, in the notice's own gradient. */
+function NoticeIcon({ tone, className = 'h-7 w-7' }) {
+  const [from, to] = NOTICE[tone].icon
+  const gradId = `notice-grad-${tone}`
+  const gradient = (
+    <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stopColor={from} />
+      <stop offset="1" stopColor={to} />
+    </linearGradient>
+  )
+  if (tone === 'error') {
+    return (
+      <svg viewBox="0 0 100 100" aria-hidden="true" className={`shrink-0 ${className}`} style={ICON_SHADOW}>
+        <defs>{gradient}</defs>
+        <path d="M50 6 L94 88 H6 Z" fill={`url(#${gradId})`} stroke={INK} strokeWidth="7" strokeLinejoin="round" />
+        <rect x="44" y="34" width="12" height="30" rx="5" fill={INK} />
+        <circle cx="50" cy="76" r="7" fill={INK} />
+      </svg>
+    )
+  }
+  if (tone === 'success') {
+    return (
+      <svg viewBox="0 0 100 100" aria-hidden="true" className={`shrink-0 ${className}`} style={ICON_SHADOW}>
+        <defs>{gradient}</defs>
+        <circle cx="50" cy="50" r="44" fill={`url(#${gradId})`} stroke={INK} strokeWidth="7" />
+        <path
+          d="M30 52 L44 66 L72 34"
+          fill="none"
+          stroke={INK}
+          strokeWidth="10"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
+  return (
+    <svg viewBox="0 0 100 100" aria-hidden="true" className={`shrink-0 ${className}`} style={ICON_SHADOW}>
+      <defs>{gradient}</defs>
+      <circle cx="50" cy="50" r="44" fill={`url(#${gradId})`} stroke={INK} strokeWidth="7" />
+      <circle cx="50" cy="30" r="7" fill={INK} />
+      <rect x="42" y="44" width="16" height="34" rx="6" fill={INK} />
     </svg>
   )
 }
@@ -288,12 +335,16 @@ export function GameHUD() {
       <ClickPopups />
       <WinsCounter />
       {message && (
-        <div
-          key={message.id}
-          className={`pointer-events-none absolute inset-x-0 top-24 z-10 px-4 text-center text-2xl ${TONE[message.tone]}`}
-          style={OUTLINE}
-        >
-          {message.text}
+        <div key={message.id} className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-center px-4">
+          <div
+            className="notice-pop flex max-w-xl items-center gap-3 rounded-2xl border-2 bg-slate-900/85 px-5 py-3 shadow-xl backdrop-blur"
+            style={{ borderColor: NOTICE[message.tone].border }}
+          >
+            <NoticeIcon tone={message.tone} />
+            <span className={`text-xl font-black ${NOTICE[message.tone].text}`} style={OUTLINE}>
+              {message.text}
+            </span>
+          </div>
         </div>
       )}
 

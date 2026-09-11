@@ -552,6 +552,50 @@ export function glowFrameTexture(color, frameW, frameH, margin) {
   })
 }
 
+/** How far in from each edge of a neonOutlineTexture its outline sits (a fraction). */
+export const NEON_INSET = 0.1875
+
+/**
+ * Neon outline for the pads: a `shape` ('square' | 'hex' | 'circle') in `color`,
+ * with a white-hot core and a soft halo on either side, on a transparent canvas.
+ * The outline sits NEON_INSET in from each edge; the rest is room for the halo.
+ * A hex has corners on the canvas's ±x, like a 6-sided cylinder turned by 30°.
+ */
+export function neonOutlineTexture(color, shape) {
+  return cached(`neon:${color}:${shape}`, () => {
+    const s = 256
+    const [canvas, ctx] = makeCanvas(s, s)
+    const c = s / 2
+    const r = c - s * NEON_INSET
+    const path = () => {
+      ctx.beginPath()
+      if (shape === 'square') ctx.rect(c - r, c - r, r * 2, r * 2)
+      else if (shape === 'hex') {
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI / 3) * i
+          ctx.lineTo(c + r * Math.cos(a), c + r * Math.sin(a))
+        }
+        ctx.closePath()
+      } else ctx.arc(c, c, r, 0, Math.PI * 2)
+    }
+    ctx.lineJoin = 'round'
+    ctx.shadowColor = color
+    ctx.strokeStyle = color
+    for (const [blur, width] of [[26, 14], [14, 9]]) {
+      ctx.shadowBlur = blur
+      ctx.lineWidth = width
+      path()
+      ctx.stroke()
+    }
+    ctx.shadowBlur = 6
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 4
+    path()
+    ctx.stroke()
+    return finish(canvas, { repeat: false })
+  })
+}
+
 /** Spiral for the portal disc. */
 export function swirlTexture() {
   return cached('swirl', () => {

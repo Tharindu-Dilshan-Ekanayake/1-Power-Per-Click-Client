@@ -7,6 +7,7 @@ import { AvatarBoundary, StandInBody } from './AvatarBoundary'
 import { useGame } from './gameStore'
 import PlayerAvatar from './PlayerAvatar'
 import { WALK_SPEED } from './progression'
+import { playSound } from './sound'
 import useKeyboard from './useKeyboard'
 
 // Capsule roughly matching the humanoid. Rapier's capsule args are the half-height of
@@ -66,6 +67,8 @@ export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalB
    * this is written every frame and must not trigger a re-render.
    */
   const motionRef = useRef({ time: 0, speed: 0, grounded: true, maxSpeed: MOVE_SPEED })
+  /** Walk-cycle phase (radians) and what the footstep and landing sounds track. */
+  const stride = useRef({ phase: 0, beat: 0, airborne: 0, fallSpeed: 0 })
 
   /**
    * Grounded check: cast a short ray straight down from the capsule centre and see
@@ -172,6 +175,7 @@ export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalB
       const v = body.linvel()
       body.setLinvel({ x: v.x, y: JUMP_VELOCITY, z: v.z }, true)
       jumpCooldown.current = JUMP_COOLDOWN_S
+      playSound('jump')
     }
 
     if (body.translation().y < FALL_LIMIT_Y) {
@@ -181,12 +185,34 @@ export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalB
 
     // --- Publish motion state for the avatar's pose -------------------------------
     const nowVel = body.linvel()
+    const speed = Math.hypot(nowVel.x, nowVel.z)
+    const maxSpeed = MOVE_SPEED * (k.sprint ? SPRINT_MULTIPLIER : 1)
+    const s = stride.current
+    // The avatar's walk cycle runs on this phase (see avatarRig), so the footsteps
+    // below land exactly as a foot does, at the far ends of the leg swing.
+    s.phase += Math.min(delta, 0.1) * (5 + Math.min(speed / maxSpeed, 1) * 5)
     const motion = motionRef.current
     motion.time += delta
-    motion.speed = Math.hypot(nowVel.x, nowVel.z)
+    motion.speed = speed
     motion.grounded = grounded
-    motion.maxSpeed = MOVE_SPEED * (k.sprint ? SPRINT_MULTIPLIER : 1)
+    motion.maxSpeed = maxSpeed
+    motion.phase = s.phase
     motion.swing = (performance.now() / 1000 - useGame.getState().swingAt) / SWING_DURATION_S
+
+    // --- Footsteps and landing ------------------------------------------------------
+    const beat = Math.floor(s.phase / Math.PI - 0.5)
+    if (beat !== s.beat) {
+      s.beat = beat
+      if (grounded && speed > 1) playSound('step', { sprint: k.sprint })
+    }
+    if (grounded) {
+      if (s.airborne > 0.25 && s.fallSpeed > 4) playSound('land', { strength: Math.min(1, s.fallSpeed / 14) })
+      s.airborne = 0
+      s.fallSpeed = 0
+    } else {
+      s.airborne += delta
+      s.fallSpeed = Math.max(s.fallSpeed, -nowVel.y)
+    }
   })
 
   return (

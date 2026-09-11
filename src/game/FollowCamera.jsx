@@ -122,6 +122,18 @@ export function FollowCamera({ bodyRef }) {
     const pos = body.translation()
     _target.set(pos.x, pos.y, pos.z)
 
+    const teleported = _lastTarget.distanceTo(_target) > TELEPORT_DISTANCE
+    _lastTarget.copy(_target)
+
+    if (teleported && initialised.current) {
+      // A portal (or a Win pad's trip home) drops you facing whatever way you
+      // happened to be looking before - reset to dead behind, so you land looking
+      // straight ahead (a stage gate, the Infinity Cave's wall) instead of sideways
+      // or backwards.
+      orbit.current.yaw = 0
+      orbit.current.pitch = START_PITCH
+    }
+
     // Spherical -> cartesian. yaw 0 puts the camera behind the player on +Z.
     const { yaw, pitch, distance } = orbit.current
     const horizontal = Math.cos(pitch) * distance
@@ -130,9 +142,6 @@ export function FollowCamera({ bodyRef }) {
       _target.y + Math.sin(pitch) * distance + LOOK_HEIGHT,
       _target.z + Math.cos(yaw) * horizontal,
     )
-
-    const teleported = _lastTarget.distanceTo(_target) > TELEPORT_DISTANCE
-    _lastTarget.copy(_target)
 
     if (!initialised.current || teleported) {
       // Avoid a long swoop in from wherever the camera was (startup, or a portal).

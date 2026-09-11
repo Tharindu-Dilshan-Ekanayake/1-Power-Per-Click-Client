@@ -3,6 +3,7 @@ import AuthHUD from './ui/AuthHUD'
 import Controls from './ui/Controls'
 import GameHUD from './ui/GameHUD'
 import LoadingScreen from './ui/LoadingScreen'
+import SoundToggle from './ui/SoundToggle'
 
 function App() {
   return (
@@ -11,6 +12,7 @@ function App() {
       <AuthHUD />
       <GameHUD />
       <Controls />
+      <SoundToggle />
       <LoadingScreen />
     </div>
   )

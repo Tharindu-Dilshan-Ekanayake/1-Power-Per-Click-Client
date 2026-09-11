@@ -8,6 +8,8 @@ import { formatNumber } from '../format'
 import { useGame } from '../gameStore'
 import { DUMMY_OFFSET_Z } from '../trainers'
 import { Label } from './Effects'
+import InteractPrompt from './InteractPrompt'
+import PadGlow from './PadGlow'
 import { labelTexture, radialGlowTexture, shade, studTexture, targetTexture } from './textures'
 
 /** Delay from click to impact, so the hit lands mid-chop rather than on the wind-up. */
@@ -18,6 +20,13 @@ const POPUP_S = 0.9
 /** Popups are pooled; this many can be on screen at once. */
 const POPUP_COUNT = 6
 const HEAD_Y = 3.05
+/** How brightly the pad's glow shines: dim while locked, brightest while training. */
+const STATUS_GLOW = {
+  active: 1.2,
+  unlocked: 0.85,
+  affordable: 0.85,
+  locked: 0.45,
+}
 
 const _up = new Vector3(0, 1, 0)
 
@@ -26,9 +35,10 @@ const popupTexture = (gain) =>
   labelTexture({ lines: [{ text: `+${formatNumber(gain)}`, fill: ['#fff6a8', '#ffc21a'] }], aspect: 2, width: 256 })
 
 /**
- * A training dummy on its pad. Stepping on the pad starts training (unlocking it
- * first if it's locked and you can afford it); every click while training makes the
- * dummy wobble, flashes the target and floats up a "+N" for the Power gained.
+ * A training dummy on its pad. Stepping on an unlocked pad starts training; on a
+ * locked one an E prompt offers to unlock it, and only E spends the Wins. Every
+ * click while training makes the dummy wobble, flashes the target and floats up a
+ * "+N" for the Power gained.
  *
  * @param {{ trainer: object, position: number[], rotationY?: number, labelY?: number }} props
  *   The dummy stands on the pad's local -Z side; `rotationY` turns the whole pad.
@@ -44,6 +54,7 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
           : 'locked',
   )
   const active = status === 'active'
+  const offered = useGame((s) => s.interact?.kind === 'trainer' && s.interact.id === trainer.id)
 
   const dummy = useRef(null)
   const flash = useRef(null)
@@ -138,6 +149,17 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
         />
       </mesh>
 
+      {/* Neon rim and rings rising off the pad, in its colour. */}
+      <PadGlow
+        color={trainer.color}
+        size={3.6}
+        y={0.235}
+        rise={2.6}
+        level={STATUS_GLOW[status]}
+        sparkles={active ? 10 : 5}
+        phase={position[2]}
+      />
+
       {/* The dummy pivots at its base, so the wobble rocks it like a punching bag. */}
       <group ref={dummy} position={[0, 0, DUMMY_OFFSET_Z]}>
         <mesh position={[0, 0.1, 0]} castShadow receiveShadow>
@@ -216,6 +238,16 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
           style={{ width: 512 }}
         />
       </Billboard>
+
+      {offered && (status === 'affordable' || status === 'locked') && (
+        <InteractPrompt
+          position={[0, 2.4, DUMMY_OFFSET_Z / 2]}
+          action="Unlock"
+          title={`${trainer.multiplier}x Training`}
+          detail={`🏆 ${formatNumber(trainer.cost)} Wins${status === 'locked' ? ' · not enough Wins' : ''}`}
+          tone={status === 'affordable' ? 'normal' : 'warn'}
+        />
+      )}
 
       <RigidBody type="fixed" colliders={false}>
         {/* Solid dummy, so you can't walk through it. */}

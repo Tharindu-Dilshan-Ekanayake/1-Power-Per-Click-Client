@@ -4,9 +4,10 @@ import { persist } from 'zustand/middleware'
 import { getEgg } from './eggs'
 import { formatNumber } from './format'
 import { activeBoost, AUTO_CLICKERS, BOOST_S, BOOSTS, levelFor, levelMultiplier } from './progression'
+import { playSound } from './sound'
 import { DEFAULT_SWORD, getSword } from './swords'
 import { getTrainer, TRAINERS } from './trainers'
-import { padPower, padWins, WALLS_PER_STAGE, wallStage } from './walls'
+import { padPower, padWins, WALL_RESET_DELAY_S, WALLS_PER_STAGE, wallStage } from './walls'
 
 /** Power for one click. Kept a whole number so the totals stay tidy. */
 export const clickGain = (sword, trainer, multiplier = 1) =>
@@ -38,6 +39,8 @@ export const useGame = create(
       unlockedTrainers: [TRAINERS[0].id],
       /** Highest stage wall ever broken (0 = none). */
       bestWall: 0,
+      /** Highest wall number ever reached in the Infinity Cave (0 = none). */
+      caveBest: 0,
       /** Running power boost: `{ multiplier, until }` (until in ms), or null. */
       boost: null,
       /** Whether the OP Auto Clicker has been bought. */
@@ -47,7 +50,7 @@ export const useGame = create(
       activeTrainer: null,
       /** Yaw the player turns to while training, so they face the dummy. */
       trainYaw: Math.PI,
-      /** What the E key acts on: `{ kind: 'sword' | 'egg' | 'pad', id }`, or null. */
+      /** What the E key acts on: `{ kind: 'sword' | 'egg' | 'pad' | 'trainer', id }`, or null. */
       interact: null,
       /** `performance.now()` seconds when E started being held, or null. */
       holdingSince: null,
@@ -55,6 +58,8 @@ export const useGame = create(
       nearWall: null,
       /** Walls broken this run, `{ [number]: true }`; cleared back in the lobby. */
       brokenWalls: {},
+      /** When the broken walls rebuild (performance.now()/1000), once that's due; else null. */
+      wallsResetAt: null,
       /** Which auto clicker is running: 'off' | 'normal' | 'op'. */
       autoClick: 'off',
       /** Player position `[x, y, z]` at the last swing, so a wall knows which side was hit. */
@@ -71,6 +76,8 @@ export const useGame = create(
       notify: (text, tone = 'info') => {
         const id = ++messageId
         set({ message: { text, tone, id } })
+        // Every "can't do that" goes through here, so they all get the same bonk.
+        if (tone === 'error') playSound('error')
         setTimeout(() => {
           if (get().message?.id === id) set({ message: null })
         }, MESSAGE_MS)
@@ -101,29 +108,44 @@ export const useGame = create(
       },
 
       /**
-       * Stepping onto a dummy's pad: unlock it if needed and affordable, then train.
-       * `faceYaw` is the yaw that points the player at the dummy.
+       * Stepping onto a dummy's pad: train if it's unlocked. A locked one only offers
+       * itself with an E prompt (see unlockTrainer); nothing is spent just by
+       * walking over it. `faceYaw` is the yaw that points the player at the dummy.
        */
       enterTrainer: (id, faceYaw = Math.PI) => {
-        const { unlockedTrainers, wins, notify } = get()
-        const trainer = getTrainer(id)
-        if (!trainer) return
-        if (!unlockedTrainers.includes(id)) {
-          if (wins < trainer.cost) {
-            notify(`Need ${formatNumber(trainer.cost - wins)} more Wins to unlock ${trainer.multiplier}x training`, 'error')
-            return
-          }
-          set({ wins: wins - trainer.cost, unlockedTrainers: [...unlockedTrainers, id] })
-          notify(`Unlocked ${trainer.multiplier}x training!`, 'success')
+        if (!getTrainer(id)) return
+        if (!get().unlockedTrainers.includes(id)) {
+          set({ interact: { kind: 'trainer', id }, holdingSince: null, trainYaw: faceYaw })
+          return
         }
         set({ activeTrainer: id, trainYaw: faceYaw })
       },
 
-      leaveTrainer: (id) => {
-        if (get().activeTrainer === id) set({ activeTrainer: null })
+      /** E on a locked training pad: buy it if affordable, then start training on it. */
+      unlockTrainer: (id) => {
+        const { unlockedTrainers, wins, interact, notify } = get()
+        const trainer = getTrainer(id)
+        if (!trainer || unlockedTrainers.includes(id)) return
+        if (wins < trainer.cost) {
+          notify(`Need ${formatNumber(trainer.cost - wins)} more Wins to unlock ${trainer.multiplier}x training`, 'error')
+          return
+        }
+        set({
+          wins: wins - trainer.cost,
+          unlockedTrainers: [...unlockedTrainers, id],
+          activeTrainer: id,
+          interact: interact?.kind === 'trainer' && interact.id === id ? null : interact,
+        })
+        notify(`Unlocked ${trainer.multiplier}x training!`, 'success')
+        playSound('unlock')
       },
 
-      /** A sword, egg or Win pad came into E range. */
+      leaveTrainer: (id) => {
+        if (get().activeTrainer === id) set({ activeTrainer: null })
+        get().clearInteract('trainer', id)
+      },
+
+      /** A sword, egg, Win pad or locked training pad came into E range. */
       setInteract: (kind, id) => set({ interact: { kind, id }, holdingSince: null }),
       /** It went out of range; ignored if something else has taken over since. */
       clearInteract: (kind, id) => {
@@ -135,6 +157,7 @@ export const useGame = create(
         const target = get().interact
         if (target?.kind === 'sword') get().pickSword(target.id)
         else if (target?.kind === 'egg') get().openEgg(target.id)
+        else if (target?.kind === 'trainer') get().unlockTrainer(target.id)
       },
       /** E went down. Win pads need it held (see WinPad); everything else acts at once. */
       interactStart: () => {
@@ -163,6 +186,7 @@ export const useGame = create(
         if (owned.includes(id)) {
           set({ equipped: id })
           notify(`Equipped ${sword.name}`)
+          playSound('equip')
           return
         }
         if (wins < sword.cost) {
@@ -171,6 +195,7 @@ export const useGame = create(
         }
         set({ wins: wins - sword.cost, owned: [...owned, id], equipped: id })
         notify(`Bought ${sword.name}! +${formatNumber(sword.power)} Power per click`, 'success')
+        playSound('unlock')
       },
 
       /** Came within sword reach of a stage wall (`z`: the z of its centre). */
@@ -186,10 +211,38 @@ export const useGame = create(
         set({ brokenWalls: { ...brokenWalls, [number]: true }, bestWall: Math.max(bestWall, number) })
         if (number > 1 && (number - 1) % WALLS_PER_STAGE === 0) {
           notify(`Stage ${wallStage(number)} reached!`, 'success')
+          playSound('stage')
         }
       },
-      /** Back in the lobby: every broken wall rebuilds. */
-      resetWalls: () => set({ brokenWalls: {} }),
+      /**
+       * Back in the lobby with walls still broken: starts the rebuild countdown
+       * (a no-op if one's already running, or nothing is broken). See WallField.
+       */
+      scheduleWallReset: () => {
+        const { brokenWalls, wallsResetAt } = get()
+        if (wallsResetAt !== null || Object.keys(brokenWalls).length === 0) return
+        set({ wallsResetAt: performance.now() / 1000 + WALL_RESET_DELAY_S })
+      },
+
+      /**
+       * Stepped back out of the lobby (through the still-broken walls) before the
+       * countdown ran out: it only rebuilds after a full, uninterrupted stay in the
+       * lobby, so cancel it. Walking back in later starts a fresh one.
+       */
+      cancelWallReset: () => {
+        if (get().wallsResetAt !== null) set({ wallsResetAt: null })
+      },
+
+      /** The countdown ran out (or a Win pad sent us straight back): rebuild every wall. */
+      resetWalls: () => set({ brokenWalls: {}, wallsResetAt: null }),
+
+      /**
+       * An Infinity Cave wall's health hit zero (see InfinityWall): add its Wins
+       * straight away and remember how deep we've gone. No toast — these come fast,
+       * and the wall's own "+N" popup already says it.
+       */
+      breakCaveWall: (number, gain) =>
+        set((state) => ({ wins: state.wins + gain, caveBest: Math.max(state.caveBest, number) })),
 
       /**
        * Held E long enough on a Win pad: pay out and rebuild the walls. Returns the
@@ -203,8 +256,11 @@ export const useGame = create(
           return 0
         }
         const gain = padWins(number, pad)
-        set({ wins: wins + gain, brokenWalls: {}, nearWall: null, interact: null, holdingSince: null })
+        // Walls stay broken a little longer; WallField starts their rebuild countdown
+        // once we've actually arrived back in the lobby (see scheduleWallReset).
+        set({ wins: wins + gain, nearWall: null, interact: null, holdingSince: null })
         notify(`+${formatNumber(gain)} Wins! Back to the lobby`, 'success')
+        playSound('win')
         return gain
       },
 
@@ -226,6 +282,7 @@ export const useGame = create(
         const start = current?.multiplier === multiplier ? current.until : now
         set({ wins: wins - def.cost, boost: { multiplier, until: start + BOOST_S * 1000 } })
         notify(`x${multiplier} Power for ${BOOST_S / 60} minutes!`, 'success')
+        playSound('unlock')
       },
 
       /** An auto clicker button: start or stop it, buying the OP one the first time. */
@@ -233,6 +290,7 @@ export const useGame = create(
         const { autoClick, opAutoOwned, wins, notify } = get()
         if (autoClick === kind) {
           set({ autoClick: 'off' })
+          playSound('click')
           return
         }
         if (kind === 'op' && !opAutoOwned) {
@@ -243,6 +301,9 @@ export const useGame = create(
           }
           set({ wins: wins - cost, opAutoOwned: true })
           notify('OP Auto Clicker unlocked!', 'success')
+          playSound('unlock')
+        } else {
+          playSound('click')
         }
         set({ autoClick: kind })
       },
@@ -250,13 +311,14 @@ export const useGame = create(
     {
       name: 'ppc-progress',
       version: 1,
-      partialize: ({ power, wins, owned, equipped, unlockedTrainers, bestWall, boost, opAutoOwned }) => ({
+      partialize: ({ power, wins, owned, equipped, unlockedTrainers, bestWall, caveBest, boost, opAutoOwned }) => ({
         power,
         wins,
         owned,
         equipped,
         unlockedTrainers,
         bestWall,
+        caveBest,
         boost,
         opAutoOwned,
       }),
