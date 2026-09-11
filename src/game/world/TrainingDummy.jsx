@@ -8,6 +8,7 @@ import { formatNumber } from '../format'
 import { useGame } from '../gameStore'
 import { DUMMY_OFFSET_Z } from '../trainers'
 import { Label } from './Effects'
+import InteractPrompt from './InteractPrompt'
 import { labelTexture, radialGlowTexture, shade, studTexture, targetTexture } from './textures'
 
 /** Delay from click to impact, so the hit lands mid-chop rather than on the wind-up. */
@@ -26,9 +27,10 @@ const popupTexture = (gain) =>
   labelTexture({ lines: [{ text: `+${formatNumber(gain)}`, fill: ['#fff6a8', '#ffc21a'] }], aspect: 2, width: 256 })
 
 /**
- * A training dummy on its pad. Stepping on the pad starts training (unlocking it
- * first if it's locked and you can afford it); every click while training makes the
- * dummy wobble, flashes the target and floats up a "+N" for the Power gained.
+ * A training dummy on its pad. Stepping on an unlocked pad starts training; on a
+ * locked one an E prompt offers to unlock it, and only E spends the Wins. Every
+ * click while training makes the dummy wobble, flashes the target and floats up a
+ * "+N" for the Power gained.
  *
  * @param {{ trainer: object, position: number[], rotationY?: number, labelY?: number }} props
  *   The dummy stands on the pad's local -Z side; `rotationY` turns the whole pad.
@@ -44,6 +46,7 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
           : 'locked',
   )
   const active = status === 'active'
+  const offered = useGame((s) => s.interact?.kind === 'trainer' && s.interact.id === trainer.id)
 
   const dummy = useRef(null)
   const flash = useRef(null)
@@ -216,6 +219,16 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
           style={{ width: 512 }}
         />
       </Billboard>
+
+      {offered && (status === 'affordable' || status === 'locked') && (
+        <InteractPrompt
+          position={[0, 2.4, DUMMY_OFFSET_Z / 2]}
+          action="Unlock"
+          title={`${trainer.multiplier}x Training`}
+          detail={`🏆 ${formatNumber(trainer.cost)} Wins${status === 'locked' ? ' · not enough Wins' : ''}`}
+          tone={status === 'affordable' ? 'normal' : 'warn'}
+        />
+      )}
 
       <RigidBody type="fixed" colliders={false}>
         {/* Solid dummy, so you can't walk through it. */}

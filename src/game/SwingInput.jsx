@@ -4,6 +4,7 @@ import { Vector3 } from 'three'
 
 import { useGame } from './gameStore'
 import { AUTO_CLICKERS } from './progression'
+import { playSound } from './sound'
 
 /** Seconds between automatic swings while standing on a training pad. */
 const AUTO_TRAIN_S = 0.4
@@ -40,6 +41,7 @@ export function SwingInput({ bodyRef }) {
       // The player's position lets a stage wall tell which side it was hit from.
       const p = bodyRef.current?.translation()
       useGame.getState().swing(popupPath(e.clientX, e.clientY), p && [p.x, p.y, p.z])
+      playSound('swing')
     }
     el.addEventListener('pointerdown', onPointerDown)
     return () => el.removeEventListener('pointerdown', onPointerDown)
@@ -70,6 +72,8 @@ export function SwingInput({ bodyRef }) {
       y = rect.top + ((1 - _screen.y) / 2) * rect.height
     }
     useGame.getState().swing(popupPath(x + (Math.random() - 0.5) * 60, y), p && [p.x, p.y, p.z])
+    // Quieter than a click: these repeat for as long as you train.
+    playSound('swing', { gain: 0.45 })
   })
 
   return null

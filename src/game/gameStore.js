@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware'
 import { getEgg } from './eggs'
 import { formatNumber } from './format'
 import { activeBoost, AUTO_CLICKERS, BOOST_S, BOOSTS, levelFor, levelMultiplier } from './progression'
+import { playSound } from './sound'
 import { DEFAULT_SWORD, getSword } from './swords'
 import { getTrainer, TRAINERS } from './trainers'
 import { padPower, padWins, WALLS_PER_STAGE, wallStage } from './walls'
@@ -47,7 +48,7 @@ export const useGame = create(
       activeTrainer: null,
       /** Yaw the player turns to while training, so they face the dummy. */
       trainYaw: Math.PI,
-      /** What the E key acts on: `{ kind: 'sword' | 'egg' | 'pad', id }`, or null. */
+      /** What the E key acts on: `{ kind: 'sword' | 'egg' | 'pad' | 'trainer', id }`, or null. */
       interact: null,
       /** `performance.now()` seconds when E started being held, or null. */
       holdingSince: null,
@@ -71,6 +72,8 @@ export const useGame = create(
       notify: (text, tone = 'info') => {
         const id = ++messageId
         set({ message: { text, tone, id } })
+        // Every "can't do that" goes through here, so they all get the same bonk.
+        if (tone === 'error') playSound('error')
         setTimeout(() => {
           if (get().message?.id === id) set({ message: null })
         }, MESSAGE_MS)
@@ -101,29 +104,44 @@ export const useGame = create(
       },
 
       /**
-       * Stepping onto a dummy's pad: unlock it if needed and affordable, then train.
-       * `faceYaw` is the yaw that points the player at the dummy.
+       * Stepping onto a dummy's pad: train if it's unlocked. A locked one only offers
+       * itself with an E prompt (see unlockTrainer); nothing is spent just by
+       * walking over it. `faceYaw` is the yaw that points the player at the dummy.
        */
       enterTrainer: (id, faceYaw = Math.PI) => {
-        const { unlockedTrainers, wins, notify } = get()
-        const trainer = getTrainer(id)
-        if (!trainer) return
-        if (!unlockedTrainers.includes(id)) {
-          if (wins < trainer.cost) {
-            notify(`Need ${formatNumber(trainer.cost - wins)} more Wins to unlock ${trainer.multiplier}x training`, 'error')
-            return
-          }
-          set({ wins: wins - trainer.cost, unlockedTrainers: [...unlockedTrainers, id] })
-          notify(`Unlocked ${trainer.multiplier}x training!`, 'success')
+        if (!getTrainer(id)) return
+        if (!get().unlockedTrainers.includes(id)) {
+          set({ interact: { kind: 'trainer', id }, holdingSince: null, trainYaw: faceYaw })
+          return
         }
         set({ activeTrainer: id, trainYaw: faceYaw })
       },
 
-      leaveTrainer: (id) => {
-        if (get().activeTrainer === id) set({ activeTrainer: null })
+      /** E on a locked training pad: buy it if affordable, then start training on it. */
+      unlockTrainer: (id) => {
+        const { unlockedTrainers, wins, interact, notify } = get()
+        const trainer = getTrainer(id)
+        if (!trainer || unlockedTrainers.includes(id)) return
+        if (wins < trainer.cost) {
+          notify(`Need ${formatNumber(trainer.cost - wins)} more Wins to unlock ${trainer.multiplier}x training`, 'error')
+          return
+        }
+        set({
+          wins: wins - trainer.cost,
+          unlockedTrainers: [...unlockedTrainers, id],
+          activeTrainer: id,
+          interact: interact?.kind === 'trainer' && interact.id === id ? null : interact,
+        })
+        notify(`Unlocked ${trainer.multiplier}x training!`, 'success')
+        playSound('unlock')
       },
 
-      /** A sword, egg or Win pad came into E range. */
+      leaveTrainer: (id) => {
+        if (get().activeTrainer === id) set({ activeTrainer: null })
+        get().clearInteract('trainer', id)
+      },
+
+      /** A sword, egg, Win pad or locked training pad came into E range. */
       setInteract: (kind, id) => set({ interact: { kind, id }, holdingSince: null }),
       /** It went out of range; ignored if something else has taken over since. */
       clearInteract: (kind, id) => {
@@ -135,6 +153,7 @@ export const useGame = create(
         const target = get().interact
         if (target?.kind === 'sword') get().pickSword(target.id)
         else if (target?.kind === 'egg') get().openEgg(target.id)
+        else if (target?.kind === 'trainer') get().unlockTrainer(target.id)
       },
       /** E went down. Win pads need it held (see WinPad); everything else acts at once. */
       interactStart: () => {
@@ -163,6 +182,7 @@ export const useGame = create(
         if (owned.includes(id)) {
           set({ equipped: id })
           notify(`Equipped ${sword.name}`)
+          playSound('equip')
           return
         }
         if (wins < sword.cost) {
@@ -171,6 +191,7 @@ export const useGame = create(
         }
         set({ wins: wins - sword.cost, owned: [...owned, id], equipped: id })
         notify(`Bought ${sword.name}! +${formatNumber(sword.power)} Power per click`, 'success')
+        playSound('unlock')
       },
 
       /** Came within sword reach of a stage wall (`z`: the z of its centre). */
@@ -186,6 +207,7 @@ export const useGame = create(
         set({ brokenWalls: { ...brokenWalls, [number]: true }, bestWall: Math.max(bestWall, number) })
         if (number > 1 && (number - 1) % WALLS_PER_STAGE === 0) {
           notify(`Stage ${wallStage(number)} reached!`, 'success')
+          playSound('stage')
         }
       },
       /** Back in the lobby: every broken wall rebuilds. */
@@ -205,6 +227,7 @@ export const useGame = create(
         const gain = padWins(number, pad)
         set({ wins: wins + gain, brokenWalls: {}, nearWall: null, interact: null, holdingSince: null })
         notify(`+${formatNumber(gain)} Wins! Back to the lobby`, 'success')
+        playSound('win')
         return gain
       },
 
@@ -226,6 +249,7 @@ export const useGame = create(
         const start = current?.multiplier === multiplier ? current.until : now
         set({ wins: wins - def.cost, boost: { multiplier, until: start + BOOST_S * 1000 } })
         notify(`x${multiplier} Power for ${BOOST_S / 60} minutes!`, 'success')
+        playSound('unlock')
       },
 
       /** An auto clicker button: start or stop it, buying the OP one the first time. */
@@ -233,6 +257,7 @@ export const useGame = create(
         const { autoClick, opAutoOwned, wins, notify } = get()
         if (autoClick === kind) {
           set({ autoClick: 'off' })
+          playSound('click')
           return
         }
         if (kind === 'op' && !opAutoOwned) {
@@ -243,6 +268,9 @@ export const useGame = create(
           }
           set({ wins: wins - cost, opAutoOwned: true })
           notify('OP Auto Clicker unlocked!', 'success')
+          playSound('unlock')
+        } else {
+          playSound('click')
         }
         set({ autoClick: kind })
       },
