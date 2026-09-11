@@ -7,6 +7,7 @@ import { getSword } from '../swords'
 import { Backdrop, Clouds, Crown, Crystal, GlowPad, Label, Sky } from './Effects'
 import EggStand from './EggStand'
 import GateSign from './GateSign'
+import InfinityWall from './InfinityWall'
 import { buildLayout } from './layout'
 import Portal from './Portal'
 import Roofs from './Roofs'
@@ -80,6 +81,7 @@ export function World({ bodyRef }) {
       <Roofs roofs={layout.roofs} />
       <WallField walls={layout.walls} winPads={layout.winPads} bodyRef={bodyRef} />
       <GateSign />
+      <InfinityWall position={layout.cave.position} />
       {layout.portals.map((portal, i) => (
         <Portal key={i} {...portal} />
       ))}

@@ -39,6 +39,8 @@ export const useGame = create(
       unlockedTrainers: [TRAINERS[0].id],
       /** Highest stage wall ever broken (0 = none). */
       bestWall: 0,
+      /** Highest wall number ever reached in the Infinity Cave (0 = none). */
+      caveBest: 0,
       /** Running power boost: `{ multiplier, until }` (until in ms), or null. */
       boost: null,
       /** Whether the OP Auto Clicker has been bought. */
@@ -235,6 +237,14 @@ export const useGame = create(
       resetWalls: () => set({ brokenWalls: {}, wallsResetAt: null }),
 
       /**
+       * An Infinity Cave wall's health hit zero (see InfinityWall): add its Wins
+       * straight away and remember how deep we've gone. No toast — these come fast,
+       * and the wall's own "+N" popup already says it.
+       */
+      breakCaveWall: (number, gain) =>
+        set((state) => ({ wins: state.wins + gain, caveBest: Math.max(state.caveBest, number) })),
+
+      /**
        * Held E long enough on a Win pad: pay out and rebuild the walls. Returns the
        * Wins gained, or 0 if Power is too low; the pad then sends the player home.
        */
@@ -301,13 +311,14 @@ export const useGame = create(
     {
       name: 'ppc-progress',
       version: 1,
-      partialize: ({ power, wins, owned, equipped, unlockedTrainers, bestWall, boost, opAutoOwned }) => ({
+      partialize: ({ power, wins, owned, equipped, unlockedTrainers, bestWall, caveBest, boost, opAutoOwned }) => ({
         power,
         wins,
         owned,
         equipped,
         unlockedTrainers,
         bestWall,
+        caveBest,
         boost,
         opAutoOwned,
       }),

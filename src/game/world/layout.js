@@ -525,15 +525,78 @@ export function buildLayout() {
     place(3, 5.6, 0, 1.4, -1.4, 1.4)
   }
 
-  // Lands in the last stage's cabin.
-  const lastStage = [0, 2, cabinStart(STAGE_COUNT) - 6]
-  // At the north end of the central path, behind the spawn, facing the gate.
-  arch(0, L - 3, 'z')
-  // Only opens once you've broken your way into the last stage yourself.
-  const lastStageWall = STAGE_COUNT * WALLS_PER_STAGE
-  portals.push({ position: [0, 0, L - 3], rotationY: Math.PI, target: lastStage, requiresWall: lastStageWall })
+  // --- The Infinity Cave -------------------------------------------------------
+  // One wall that never stays broken for long: past it there's no far side, just
+  // the same spot, one number higher and a little tougher, forever. Its own small
+  // room, well clear of the stage corridor; a magic door inside brings you back.
+  const CAVE_X = 400
+  const CAVE_LEN = 30
+  const CAVE_HALF = CORRIDOR_HALF
+  // You only ever arrive by portal, never by walking up to it, so the room has no
+  // need of a real doorway anywhere - it's sealed solid on every side.
+  const CAVE_FRONT = 2
+  const cbox = (x0, y0, z0, x1, y1, z1, m, c) => box(CAVE_X + x0, y0, z0, CAVE_X + x1, y1, z1, m, c)
+  const caveTheme = { floor: ['#c9b3ff', '#b79cf2'], side: '#5a3a9a', neon: '#b65cff' }
+  const caveWallFront = -(CAVE_LEN - 3)
+  const caveWallPosition = [CAVE_X, 0, caveWallFront]
+  const caveEntrance = -2
+  const caveSpawn = [CAVE_X, 2, caveEntrance - 3]
+
+  cbox(-CAVE_HALF, -1, -CAVE_LEN, CAVE_HALF, 0, CAVE_FRONT, `floor:${caveTheme.floor.join(',')}`)
+  for (const side of [-1, 1]) {
+    const xin = side * CAVE_HALF
+    const xout = side * (CAVE_HALF + WALL_T)
+    const [xa, xb] = side < 0 ? [xout, xin] : [xin, xout]
+    const [na, nb] = side < 0 ? [xin, xin + 0.12] : [xin - 0.12, xin]
+    cbox(xa, -1, -CAVE_LEN, xb, WALL_H, CAVE_FRONT, `panel:${caveTheme.side}`)
+    cbox(na, 0, -CAVE_LEN, nb, 0.25, CAVE_FRONT, `neon:${caveTheme.neon}`, false)
+    cbox(na, WALL_H - 0.6, -CAVE_LEN, nb, WALL_H - 0.4, CAVE_FRONT, `neon:${caveTheme.neon}`, false)
+  }
+  // Seals the one side that would otherwise open onto nothing.
+  cbox(-CAVE_HALF - WALL_T, -1, CAVE_FRONT - 1, CAVE_HALF + WALL_T, WALL_H, CAVE_FRONT, `panel:${caveTheme.side}`)
+  // The wall itself is only as wide as its doorway (OPEN_HALF), narrower than the
+  // room (CAVE_HALF) - this dark frame fills the gap on both sides and above it, the
+  // same way `divider` does for every numbered stage wall, so there's no sliver of
+  // daylight showing past its edges.
+  cbox(-CAVE_HALF, -1, caveWallFront - 1, -OPEN_HALF, WALL_H, caveWallFront + 1, 'dark')
+  cbox(OPEN_HALF, -1, caveWallFront - 1, CAVE_HALF, WALL_H, caveWallFront + 1, 'dark')
+  cbox(-OPEN_HALF, OPEN_H, caveWallFront - 1, OPEN_HALF, WALL_H, caveWallFront + 1, 'dark')
+  // A solid backstop directly behind the wall's own slab: it regenerates the
+  // instant it breaks, but this guarantees nothing can ever be walked into.
+  cbox(-OPEN_HALF, -1, caveWallFront - 1.6, OPEN_HALF, WALL_H, caveWallFront - 0.9, 'dark')
+  roofs.push({ x0: CAVE_X - CAVE_HALF, x1: CAVE_X + CAVE_HALF, z0: -CAVE_LEN, z1: CAVE_FRONT, y: WALL_H - 0.01 })
+  // On both side walls, not over the wall itself - it already shows its own
+  // number and health bar, and the sign was fighting with them for the same spot.
+  for (const side of [-1, 1]) {
+    labels.push({
+      lines: [
+        { text: 'INFINITY CAVE', scale: 1.3, fill: ['#f3dcff', '#c07bff'] },
+        { text: 'The wall keeps coming back - hit it for Wins!', scale: 0.55, fill: '#e2b8ff' },
+      ],
+      position: [CAVE_X + side * (CAVE_HALF - 0.05), 7, (caveWallFront + CAVE_FRONT) / 2],
+      rotationY: -side * (Math.PI / 2),
+      size: [12, 2.6],
+      style: { bg: '#1c1230', border: '#c07bff' },
+    })
+  }
+
+  // The magic door home, just inside the entrance.
+  arch(CAVE_X, caveEntrance, 'z')
+  portals.push({ position: [CAVE_X, 0, caveEntrance], rotationY: 0, target: SPAWN })
   labels.push({
-    lines: ['LAST STAGE'],
+    lines: ['MAGIC DOOR - BACK TO LOBBY'],
+    position: [CAVE_X, 8.2, caveEntrance - 1.05],
+    size: [9.6, 1],
+    style: { fill: ['#f3dcff', '#c07bff'] },
+  })
+
+  // --- Portals -------------------------------------------------------------------
+  // At the north end of the central path, behind the spawn, facing the gate. Open
+  // to anyone at any time - no wall to break first.
+  arch(0, L - 3, 'z')
+  portals.push({ position: [0, 0, L - 3], rotationY: Math.PI, target: caveSpawn })
+  labels.push({
+    lines: ['INFINITY CAVE'],
     position: [0, 8.2, L - 4.05],
     rotationY: Math.PI,
     size: [8.4, 1],
@@ -560,7 +623,7 @@ export function buildLayout() {
       'WASD run  -  Shift sprint  -  Space jump',
       `Break ${WALLS_PER_STAGE} walls with your sword to enter a stage`,
       'Hold E on a Win pad to cash in',
-      { text: `Purple portal = last stage (after wall ${lastStageWall})`, fill: '#e2b8ff' },
+      { text: 'Purple portal = Infinity Cave, open any time', fill: '#e2b8ff' },
     ],
     position: [16, 5.6, L - 3.04],
     rotationY: Math.PI,
@@ -574,6 +637,7 @@ export function buildLayout() {
     winPads,
     roofs,
     portals,
+    cave: { position: caveWallPosition },
     pads,
     crowns,
     crystals,
