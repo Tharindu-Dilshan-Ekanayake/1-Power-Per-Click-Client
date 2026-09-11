@@ -57,7 +57,7 @@ export function InteractPrompt({ position, action, title, detail, tone = 'normal
               />
             </svg>
           )}
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg border-b-4 border-slate-400 bg-white text-xl font-black text-slate-900">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full border-b-4 border-slate-400 bg-white text-xl font-black text-slate-900">
             E
           </span>
         </span>
