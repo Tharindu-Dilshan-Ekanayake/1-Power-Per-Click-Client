@@ -2,10 +2,11 @@
  * Blocky sword built from boxes, in world units. The grip is at the origin and the
  * blade points up +Y, so holders only need to rotate it.
  *
- * @param {{ sword: import('./swords').SWORDS[number] }} props
+ * @param {{ sword: import('./swords').SWORDS[number], minGlow?: number }} props
+ *   `minGlow` lights up even a plain blade a little (the shop display uses it).
  */
-export function SwordModel({ sword }) {
-  const glow = sword.glow ?? 0
+export function SwordModel({ sword, minGlow = 0 }) {
+  const glow = Math.max(sword.glow ?? 0, minGlow)
   const blade = (
     <meshStandardMaterial
       color={sword.blade}

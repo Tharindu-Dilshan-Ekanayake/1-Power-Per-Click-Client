@@ -9,6 +9,7 @@ import { useGame } from '../gameStore'
 import { DUMMY_OFFSET_Z } from '../trainers'
 import { Label } from './Effects'
 import InteractPrompt from './InteractPrompt'
+import PadGlow from './PadGlow'
 import { labelTexture, radialGlowTexture, shade, studTexture, targetTexture } from './textures'
 
 /** Delay from click to impact, so the hit lands mid-chop rather than on the wind-up. */
@@ -19,6 +20,13 @@ const POPUP_S = 0.9
 /** Popups are pooled; this many can be on screen at once. */
 const POPUP_COUNT = 6
 const HEAD_Y = 3.05
+/** How brightly the pad's glow shines: dim while locked, brightest while training. */
+const STATUS_GLOW = {
+  active: 1.2,
+  unlocked: 0.85,
+  affordable: 0.85,
+  locked: 0.45,
+}
 
 const _up = new Vector3(0, 1, 0)
 
@@ -140,6 +148,17 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
           roughness={0.6}
         />
       </mesh>
+
+      {/* Neon rim and rings rising off the pad, in its colour. */}
+      <PadGlow
+        color={trainer.color}
+        size={3.6}
+        y={0.235}
+        rise={2.6}
+        level={STATUS_GLOW[status]}
+        sparkles={active ? 10 : 5}
+        phase={position[2]}
+      />
 
       {/* The dummy pivots at its base, so the wobble rocks it like a punching bag. */}
       <group ref={dummy} position={[0, 0, DUMMY_OFFSET_Z]}>

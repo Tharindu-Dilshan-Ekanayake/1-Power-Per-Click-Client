@@ -1,4 +1,4 @@
-import { Billboard, Sparkles } from '@react-three/drei'
+import { Billboard } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { useRef } from 'react'
@@ -6,9 +6,11 @@ import { AdditiveBlending } from 'three'
 
 import { formatNumber } from '../format'
 import { useGame } from '../gameStore'
+import { glowColor } from '../swords'
 import SwordModel from '../SwordModel'
 import { Label } from './Effects'
 import InteractPrompt from './InteractPrompt'
+import PadGlow from './PadGlow'
 import { radialGlowTexture, shade } from './textures'
 
 /** Pad colour: red not owned (pulsing when affordable), yellow owned, purple equipped. */
@@ -17,6 +19,14 @@ const STATUS_COLOR = {
   owned: '#ffd23f',
   affordable: '#ff3b3b',
   locked: '#d9302b',
+}
+
+/** How brightly the pad's glow shines: dim while out of reach, brightest in hand. */
+const STATUS_GLOW = {
+  equipped: 1.15,
+  owned: 0.85,
+  affordable: 1,
+  locked: 0.5,
 }
 
 const GOLD = ['#fff6a8', '#ffc21a']
@@ -45,7 +55,8 @@ export function SwordPad({ sword, position }) {
   const padMaterial = useRef(null)
   const aura = useRef(null)
 
-  const glow = sword.glow ?? 0
+  /** Each sword glows in its own colour. */
+  const glow = glowColor(sword)
   /** Pommel-to-tip height of the displayed sword. */
   const height = 1.78 * sword.size * DISPLAY_SCALE
   const baseY = PAD_TOP + 0.3 * sword.size * DISPLAY_SCALE
@@ -109,36 +120,36 @@ export function SwordPad({ sword, position }) {
       </mesh>
 
       <group ref={swordRef} position={[0, baseY, 0]} scale={DISPLAY_SCALE}>
-        <SwordModel sword={sword} />
+        <SwordModel sword={sword} minGlow={0.25} />
       </group>
 
-      {glow > 0 && (
-        <>
-          <Billboard position={[0, PAD_TOP + height * 0.55, 0]}>
-            <mesh>
-              <planeGeometry args={[1.6 * sword.size, height * 1.25]} />
-              <meshBasicMaterial
-                ref={aura}
-                map={radialGlowTexture()}
-                color={sword.blade}
-                transparent
-                opacity={0.35}
-                blending={AdditiveBlending}
-                depthWrite={false}
-                toneMapped={false}
-              />
-            </mesh>
-          </Billboard>
-          <Sparkles
-            count={14}
-            scale={[1.2, height, 1.2]}
-            position={[0, PAD_TOP + height / 2, 0]}
-            size={4}
-            speed={0.5}
-            color={sword.edge}
+      {/* Neon rim and rings rising round the sword, in its colour, plus a soft aura
+          behind the blade. */}
+      <PadGlow
+        color={glow}
+        shape="hex"
+        size={3.4}
+        y={PAD_TOP + 0.01}
+        rise={Math.max(2.4, height + 0.4)}
+        level={STATUS_GLOW[status]}
+        sparkles={sword.glow ? 8 : 5}
+        phase={position[0]}
+      />
+      <Billboard position={[0, PAD_TOP + height * 0.55, 0]}>
+        <mesh>
+          <planeGeometry args={[1.6 * sword.size, height * 1.25]} />
+          <meshBasicMaterial
+            ref={aura}
+            map={radialGlowTexture()}
+            color={glow}
+            transparent
+            opacity={0.35}
+            blending={AdditiveBlending}
+            depthWrite={false}
+            toneMapped={false}
           />
-        </>
-      )}
+        </mesh>
+      </Billboard>
 
       <Billboard position={[0, PAD_TOP + height + 1.15, 0]}>
         <Label
