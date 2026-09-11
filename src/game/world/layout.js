@@ -413,13 +413,9 @@ export function buildLayout() {
   box(-9, 16, GZ0 + 1.5, 9, 18, GZ1 - 1.5, 'dark')
   box(-6, 18, GZ0 + 2, 6, 20, GZ1 - 2, 'dark')
   // The first of stage 1's ten walls. No Win pads out here: they're in the cabins.
+  // Its "STAGE 1" sign is drawn live (see GateSign), so it can also show the
+  // walls-rebuild countdown; not pushed onto the static `labels` list.
   addWall(1, GATE_Z)
-  labels.push({
-    lines: ['STAGE 1'],
-    position: [0, 12, GATE_Z + 0.12],
-    size: [13, 3],
-    style: { fill: ['#fff6a8', '#ffc21a'], bg: '#15151c', border: '#ffc21a' },
-  })
 
   // --- Stage corridors --------------------------------------------------------------
   const CH = CORRIDOR_HALF

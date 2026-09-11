@@ -6,6 +6,7 @@ import { useGame } from '../gameStore'
 import { getSword } from '../swords'
 import { Backdrop, Clouds, Crown, Crystal, GlowPad, Label, Sky } from './Effects'
 import EggStand from './EggStand'
+import GateSign from './GateSign'
 import { buildLayout } from './layout'
 import Portal from './Portal'
 import Roofs from './Roofs'
@@ -27,20 +28,23 @@ const LOBBY_RESET_Z = GATE_Z + 6
 /**
  * The stage walls and Win pads near the player. There are well over a hundred of
  * each, so only the nearby ones are mounted; broken-wall state lives in the store,
- * so a wall remounts as it was. Walking back into the lobby rebuilds them all.
+ * so a wall remounts as it was. Walking back into the lobby starts a short countdown
+ * (shown above stage 1's gate, the only broken wall visible from there) before every
+ * broken wall rebuilds.
  */
 function WallField({ walls, winPads, bodyRef }) {
   const [band, setBand] = useState(() => Math.round(SPAWN[2] / WALL_BAND))
 
   useFrame(() => {
+    const game = useGame.getState()
+    if (game.wallsResetAt !== null && performance.now() / 1000 >= game.wallsResetAt) game.resetWalls()
+
     const p = bodyRef.current?.translation()
     if (!p) return
     const next = Math.round(p.z / WALL_BAND)
     if (next !== band) setBand(next)
-    if (p.z > LOBBY_RESET_Z) {
-      const game = useGame.getState()
-      if (Object.keys(game.brokenWalls).length > 0) game.resetWalls()
-    }
+    if (p.z > LOBBY_RESET_Z) game.scheduleWallReset()
+    else game.cancelWallReset()
   })
 
   const z = band * WALL_BAND
@@ -75,6 +79,7 @@ export function World({ bodyRef }) {
       <StaticBlocks blocks={layout.blocks} />
       <Roofs roofs={layout.roofs} />
       <WallField walls={layout.walls} winPads={layout.winPads} bodyRef={bodyRef} />
+      <GateSign />
       {layout.portals.map((portal, i) => (
         <Portal key={i} {...portal} />
       ))}

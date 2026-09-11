@@ -20,6 +20,13 @@ export const wallHp = (number) => tidy(10 * 1.25 ** (number - 1))
 export const WALL_REGEN = 0.5
 
 /**
+ * Seconds to wait, once you're back in the lobby, before every broken wall rebuilds.
+ * A brief grace period rather than an instant snap shut, so it doesn't seal behind
+ * you the moment you step through.
+ */
+export const WALL_RESET_DELAY_S = 10
+
+/**
  * The two Win pads at the end of each stage's cabin, in front of the next stage's
  * first wall. side: -1 left, +1 right, seen walking in. Gold is always open; blue
  * pays double but needs three times that wall's health in Power.

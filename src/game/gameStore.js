@@ -7,7 +7,7 @@ import { activeBoost, AUTO_CLICKERS, BOOST_S, BOOSTS, levelFor, levelMultiplier 
 import { playSound } from './sound'
 import { DEFAULT_SWORD, getSword } from './swords'
 import { getTrainer, TRAINERS } from './trainers'
-import { padPower, padWins, WALLS_PER_STAGE, wallStage } from './walls'
+import { padPower, padWins, WALL_RESET_DELAY_S, WALLS_PER_STAGE, wallStage } from './walls'
 
 /** Power for one click. Kept a whole number so the totals stay tidy. */
 export const clickGain = (sword, trainer, multiplier = 1) =>
@@ -56,6 +56,8 @@ export const useGame = create(
       nearWall: null,
       /** Walls broken this run, `{ [number]: true }`; cleared back in the lobby. */
       brokenWalls: {},
+      /** When the broken walls rebuild (performance.now()/1000), once that's due; else null. */
+      wallsResetAt: null,
       /** Which auto clicker is running: 'off' | 'normal' | 'op'. */
       autoClick: 'off',
       /** Player position `[x, y, z]` at the last swing, so a wall knows which side was hit. */
@@ -210,8 +212,27 @@ export const useGame = create(
           playSound('stage')
         }
       },
-      /** Back in the lobby: every broken wall rebuilds. */
-      resetWalls: () => set({ brokenWalls: {} }),
+      /**
+       * Back in the lobby with walls still broken: starts the rebuild countdown
+       * (a no-op if one's already running, or nothing is broken). See WallField.
+       */
+      scheduleWallReset: () => {
+        const { brokenWalls, wallsResetAt } = get()
+        if (wallsResetAt !== null || Object.keys(brokenWalls).length === 0) return
+        set({ wallsResetAt: performance.now() / 1000 + WALL_RESET_DELAY_S })
+      },
+
+      /**
+       * Stepped back out of the lobby (through the still-broken walls) before the
+       * countdown ran out: it only rebuilds after a full, uninterrupted stay in the
+       * lobby, so cancel it. Walking back in later starts a fresh one.
+       */
+      cancelWallReset: () => {
+        if (get().wallsResetAt !== null) set({ wallsResetAt: null })
+      },
+
+      /** The countdown ran out (or a Win pad sent us straight back): rebuild every wall. */
+      resetWalls: () => set({ brokenWalls: {}, wallsResetAt: null }),
 
       /**
        * Held E long enough on a Win pad: pay out and rebuild the walls. Returns the
@@ -225,7 +246,9 @@ export const useGame = create(
           return 0
         }
         const gain = padWins(number, pad)
-        set({ wins: wins + gain, brokenWalls: {}, nearWall: null, interact: null, holdingSince: null })
+        // Walls stay broken a little longer; WallField starts their rebuild countdown
+        // once we've actually arrived back in the lobby (see scheduleWallReset).
+        set({ wins: wins + gain, nearWall: null, interact: null, holdingSince: null })
         notify(`+${formatNumber(gain)} Wins! Back to the lobby`, 'success')
         playSound('win')
         return gain
