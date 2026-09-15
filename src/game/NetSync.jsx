@@ -19,8 +19,9 @@ const KEEPALIVE_STEPS = 60
 const RESYNC_MS = 250
 
 /**
- * Keeps us in a lobby on the server: connects on mount, sends our name, avatar and
- * sword whenever they change, and our position and sword swings 20 times a second.
+ * Keeps us in a lobby on the server: connects on mount, sends our name, avatar,
+ * sword, pet and active training pad whenever they change, and our position and
+ * sword swings 20 times a second.
  *
  * Positions are read right after a physics step and stamped with the physics clock
  * (steps x 1/60 s), so each one is exactly where we were at the time it's labelled
@@ -31,11 +32,13 @@ const RESYNC_MS = 250
 export function NetSync({ bodyRef }) {
   const { identity, avatar, proportions } = useBloxity()
   const sword = useGame((s) => s.equipped)
+  const pet = useGame((s) => s.equippedPet)
+  const trainer = useGame((s) => s.activeTrainer)
   const name = identity?.displayName || identity?.username || 'Player'
 
   const profile = useMemo(
-    () => ({ name, avatar: avatar ? { equipped: avatar, proportions } : null, sword }),
-    [name, avatar, proportions, sword],
+    () => ({ name, avatar: avatar ? { equipped: avatar, proportions } : null, sword, pet, trainer }),
+    [name, avatar, proportions, sword, pet, trainer],
   )
 
   // Declared before the connect effect, so the first hello already carries it.

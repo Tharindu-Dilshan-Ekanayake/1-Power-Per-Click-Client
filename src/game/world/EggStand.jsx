@@ -4,11 +4,13 @@ import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { useRef } from 'react'
 import { AdditiveBlending } from 'three'
 
-import { formatNumber } from '../format'
+import { formatBonus, formatNumber } from '../format'
 import { useGame } from '../gameStore'
+import { getPet } from '../pets'
 import { Label } from './Effects'
 import InteractPrompt from './InteractPrompt'
 import { radialGlowTexture, shade } from './textures'
+import { PetModel } from './PetModel'
 
 /** Voxel egg silhouette, bottom to top: [width, height, colour index]. */
 const LAYERS = [
@@ -69,7 +71,12 @@ function EggModel({ egg }) {
 export function EggStand({ egg, position }) {
   const eggRef = useRef(null)
   const aura = useRef(null)
+  const petRef = useRef(null)
   const glow = egg.glow ?? 0
+  const pet = getPet(egg.id)
+
+  const owned = useGame((s) => s.ownedPets.includes(egg.id))
+  const equipped = useGame((s) => s.equippedPet === egg.id)
 
   useFrame(({ clock }, delta) => {
     const t = clock.elapsedTime
@@ -78,6 +85,12 @@ export function EggStand({ egg, position }) {
       eggRef.current.position.y = STAND_TOP + LIFT + Math.sin(t * 1.5 + position[2]) * 0.12
     }
     if (aura.current) aura.current.opacity = 0.3 + 0.12 * Math.sin(t * 2 + position[2])
+    if (petRef.current) {
+      petRef.current.rotation.y += delta * 0.8
+      // STAND_TOP, not 0 - the pedestal is solid up to there, so anything lower
+      // just sinks into it (its legs disappearing into the stone).
+      petRef.current.position.y = STAND_TOP + Math.abs(Math.sin(t * 3 + position[2])) * 0.22
+    }
   })
 
   const inRange = useGame((s) => s.interact?.kind === 'egg' && s.interact.id === egg.id)
@@ -100,9 +113,15 @@ export function EggStand({ egg, position }) {
         <meshStandardMaterial color={egg.colors[0]} emissive={egg.colors[0]} emissiveIntensity={0.4} />
       </mesh>
 
-      <group ref={eggRef} position={[0, STAND_TOP + LIFT, 0]}>
-        <EggModel egg={egg} />
-      </group>
+      {owned ? (
+        <group ref={petRef} position={[0, STAND_TOP, 0]}>
+          <PetModel pet={pet} />
+        </group>
+      ) : (
+        <group ref={eggRef} position={[0, STAND_TOP + LIFT, 0]}>
+          <EggModel egg={egg} />
+        </group>
+      )}
 
       {glow > 0 && (
         <>
@@ -134,12 +153,21 @@ export function EggStand({ egg, position }) {
 
       <Billboard position={[0, STAND_TOP + EGG_HEIGHT + 1.3, 0]}>
         <Label
-          lines={[
-            { text: egg.name, scale: 1.2 },
-            { text: `${formatNumber(egg.cost)} Wins`, icon: 'trophy', fill: GOLD },
-          ]}
+          lines={
+            owned
+              ? [
+                  { text: pet.name, scale: 1.2 },
+                  { text: `x${formatBonus(pet.winsBonus)} Wins`, icon: 'trophy', fill: GOLD },
+                  { text: equipped ? 'Following you' : 'Tap E to summon', scale: 0.85 },
+                ]
+              : [
+                  { text: egg.name, scale: 1.2 },
+                  { text: `${formatNumber(egg.cost)} Wins`, icon: 'trophy', fill: GOLD },
+                  { text: `Pet: x${formatBonus(pet.winsBonus)} Wins`, scale: 0.85, fill: '#9ff5c0' },
+                ]
+          }
           position={[0, 0, 0]}
-          size={[3.6, 1.5]}
+          size={[3.6, 2]}
           style={{ width: 512 }}
         />
       </Billboard>
@@ -156,14 +184,23 @@ export function EggStand({ egg, position }) {
         />
       </RigidBody>
 
-      {inRange && (
-        <InteractPrompt
-          position={[0, 1.8, 0]}
-          action="Open"
-          title={egg.name}
-          detail={`🏆 ${formatNumber(egg.cost)} Wins`}
-        />
-      )}
+      {inRange &&
+        (owned ? (
+          <InteractPrompt
+            position={[0, 1.8, 0]}
+            action={equipped ? 'Following' : 'Summon'}
+            title={pet.name}
+            detail={`🏆 x${formatBonus(pet.winsBonus)} Wins`}
+            tone={equipped ? 'done' : 'normal'}
+          />
+        ) : (
+          <InteractPrompt
+            position={[0, 1.8, 0]}
+            action="Hatch"
+            title={egg.name}
+            detail={`🏆 ${formatNumber(egg.cost)} Wins  ·  pet x${formatBonus(pet.winsBonus)}`}
+          />
+        ))}
     </group>
   )
 }

@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 import { getEgg } from './eggs'
-import { formatNumber } from './format'
+import { formatBonus, formatNumber } from './format'
+import { getPet, petWinsMultiplier } from './pets'
 import { activeBoost, AUTO_CLICKERS, BOOST_S, BOOSTS, levelFor, levelMultiplier } from './progression'
 import { playSound } from './sound'
 import { DEFAULT_SWORD, getSword } from './swords'
@@ -36,6 +37,10 @@ export const useGame = create(
       wins: 0,
       owned: [DEFAULT_SWORD],
       equipped: DEFAULT_SWORD,
+      /** Ids of hatched eggs (one pet each — see pets.js). */
+      ownedPets: [],
+      /** Id of the pet currently following the player, or null. */
+      equippedPet: null,
       unlockedTrainers: [TRAINERS[0].id],
       /** Highest stage wall ever broken (0 = none). */
       bestWall: 0,
@@ -156,7 +161,7 @@ export const useGame = create(
       interactNow: () => {
         const target = get().interact
         if (target?.kind === 'sword') get().pickSword(target.id)
-        else if (target?.kind === 'egg') get().openEgg(target.id)
+        else if (target?.kind === 'egg') get().hatchEgg(target.id)
         else if (target?.kind === 'trainer') get().unlockTrainer(target.id)
       },
       /** E went down. Win pads need it held (see WinPad); everything else acts at once. */
@@ -169,10 +174,35 @@ export const useGame = create(
       interactEnd: () => {
         if (get().holdingSince !== null) set({ holdingSince: null })
       },
-      /** Hatching isn't built yet, so opening an egg just says so. */
-      openEgg: (id) => {
+      /**
+       * E at an egg stand: hatch it (spends Wins) if it isn't owned yet, otherwise
+       * summon its pet to follow the player - or, if it's already following, just
+       * says so.
+       */
+      hatchEgg: (id) => {
+        const { ownedPets, equippedPet, wins, notify } = get()
         const egg = getEgg(id)
-        if (egg) get().notify(`${egg.name}: hatching pets is coming soon!`)
+        const pet = getPet(id)
+        if (!egg || !pet) return
+
+        if (ownedPets.includes(id)) {
+          if (equippedPet === id) {
+            notify(`${pet.name} is already following you`)
+            return
+          }
+          set({ equippedPet: id })
+          notify(`${pet.name} is now following you! x${formatBonus(pet.winsBonus)} Wins`)
+          playSound('equip')
+          return
+        }
+
+        if (wins < egg.cost) {
+          notify(`Need ${formatNumber(egg.cost - wins)} more Wins to hatch ${egg.name}`, 'error')
+          return
+        }
+        set({ wins: wins - egg.cost, ownedPets: [...ownedPets, id], equippedPet: id })
+        notify(`${egg.name} hatched into ${pet.name}! x${formatBonus(pet.winsBonus)} Wins`, 'success')
+        playSound('unlock')
       },
 
       /** E at a sword pad: equip it if owned, otherwise try to buy it. */
@@ -242,24 +272,29 @@ export const useGame = create(
        * and the wall's own "+N" popup already says it.
        */
       breakCaveWall: (number, gain) =>
-        set((state) => ({ wins: state.wins + gain, caveBest: Math.max(state.caveBest, number) })),
+        set((state) => ({
+          wins: state.wins + Math.round(gain * petWinsMultiplier(state.equippedPet)),
+          caveBest: Math.max(state.caveBest, number),
+        })),
 
       /**
        * Held E long enough on a Win pad: pay out and rebuild the walls. Returns the
        * Wins gained, or 0 if Power is too low; the pad then sends the player home.
        */
       claimPad: (number, pad) => {
-        const { power, wins, notify } = get()
+        const { power, wins, equippedPet, notify } = get()
         const needed = padPower(number, pad)
         if (power < needed) {
           notify(`Need ${formatNumber(needed)} Power for this Win pad`, 'error')
           return 0
         }
-        const gain = padWins(number, pad)
+        const bonus = petWinsMultiplier(equippedPet)
+        const gain = Math.round(padWins(number, pad) * bonus)
         // Walls stay broken a little longer; WallField starts their rebuild countdown
         // once we've actually arrived back in the lobby (see scheduleWallReset).
         set({ wins: wins + gain, nearWall: null, interact: null, holdingSince: null })
-        notify(`+${formatNumber(gain)} Wins! Back to the lobby`, 'success')
+        const petNote = bonus > 1 ? ` (${getPet(equippedPet).name} x${formatBonus(bonus)})` : ''
+        notify(`+${formatNumber(gain)} Wins${petNote}! Back to the lobby`, 'success')
         playSound('win')
         return gain
       },
@@ -311,11 +346,25 @@ export const useGame = create(
     {
       name: 'ppc-progress',
       version: 1,
-      partialize: ({ power, wins, owned, equipped, unlockedTrainers, bestWall, caveBest, boost, opAutoOwned }) => ({
+      partialize: ({
         power,
         wins,
         owned,
         equipped,
+        ownedPets,
+        equippedPet,
+        unlockedTrainers,
+        bestWall,
+        caveBest,
+        boost,
+        opAutoOwned,
+      }) => ({
+        power,
+        wins,
+        owned,
+        equipped,
+        ownedPets,
+        equippedPet,
         unlockedTrainers,
         bestWall,
         caveBest,
