@@ -32,7 +32,8 @@ const RESYNC_MS = 250
 export function NetSync({ bodyRef }) {
   const { identity, avatar, proportions } = useBloxity()
   const sword = useGame((s) => s.equipped)
-  const pet = useGame((s) => s.equippedPet)
+  // Other players see the pet leading our squad; the wire format carries one.
+  const pet = useGame((s) => s.equippedPets[0] ?? null)
   const trainer = useGame((s) => s.activeTrainer)
   const name = identity?.displayName || identity?.username || 'Player'
 

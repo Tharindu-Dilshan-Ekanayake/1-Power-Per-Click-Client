@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 
 import { formatBonus, formatNumber } from '../game/format'
 import { powerMultiplier, useGame } from '../game/gameStore'
-import { getPet, petWinsMultiplier } from '../game/pets'
+import { petWinsMultiplier } from '../game/pets'
 import { activeBoost, AUTO_CLICKERS, BOOSTS, levelFor, levelPower, MAX_LEVEL, WALK_SPEED } from '../game/progression'
 import { getTrainer } from '../game/trainers'
+import { PetsButton, PetsPanel } from './PetsPanel'
 
 /** Chunky outlined game text. */
 const OUTLINE = {
@@ -210,8 +211,8 @@ function ClickPopups() {
  */
 function WinsCounter() {
   const wins = useGame((s) => s.wins)
-  const petId = useGame((s) => s.equippedPet)
-  const bonus = petWinsMultiplier(petId)
+  const pets = useGame((s) => s.equippedPets)
+  const bonus = petWinsMultiplier(pets)
   return (
     <div className="pointer-events-none absolute left-4 top-20 z-10 flex flex-col items-start" style={OUTLINE}>
       <div className="flex items-center gap-2">
@@ -222,7 +223,7 @@ function WinsCounter() {
       </div>
       {bonus > 1 && (
         <span className="ml-1 text-2xl text-lime-300">
-          {getPet(petId).name} x{formatBonus(bonus)} Wins
+          {pets.length} pets · x{formatBonus(bonus)} Wins
         </span>
       )}
     </div>
@@ -347,6 +348,8 @@ export function GameHUD() {
     <>
       <ClickPopups />
       <WinsCounter />
+      <PetsButton />
+      <PetsPanel />
       {message && (
         <div key={message.id} className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-center px-4">
           <div

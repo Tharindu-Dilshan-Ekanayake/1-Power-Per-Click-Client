@@ -95,10 +95,20 @@ export const PETS = [
 /** @returns the pet, or undefined for an unknown id. */
 export const getPet = (id) => PETS.find((p) => p.id === id)
 
+/** How many pets can follow you at once: all of them, once they're all hatched. */
+export const MAX_EQUIPPED = PETS.length
+
 /**
- * What the pet following you multiplies your Wins by — 1 with no pet out. Every
- * payout goes through this (see claimPad and breakCaveWall in gameStore).
+ * What the pets following you multiply your Wins by — 1 with none out. Their
+ * bonuses add up, so a whole squad beats any one of them alone: that's the
+ * number the Pets panel shows at the top, and every payout goes through it
+ * (see claimPad and breakCaveWall in gameStore).
  *
- * @param {string|null} id the equipped pet's id
+ * @param {string[]} ids the equipped pets' ids
  */
-export const petWinsMultiplier = (id) => (id ? (getPet(id)?.winsBonus ?? 1) : 1)
+export const petWinsMultiplier = (ids) => {
+  // A string, not a list, is progress saved before pets came in squads.
+  const list = Array.isArray(ids) ? ids : ids ? [ids] : []
+  const total = list.reduce((sum, id) => sum + (getPet(id)?.winsBonus ?? 0), 0)
+  return total > 0 ? total : 1
+}

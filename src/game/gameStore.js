@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 
 import { getEgg } from './eggs'
 import { formatBonus, formatNumber } from './format'
-import { getPet, petWinsMultiplier } from './pets'
+import { getPet, MAX_EQUIPPED, PETS, petWinsMultiplier } from './pets'
 import { activeBoost, AUTO_CLICKERS, BOOST_S, BOOSTS, levelFor, levelMultiplier } from './progression'
 import { playSound } from './sound'
 import { DEFAULT_SWORD, getSword } from './swords'
@@ -39,8 +39,15 @@ export const useGame = create(
       equipped: DEFAULT_SWORD,
       /** Ids of hatched eggs (one pet each — see pets.js). */
       ownedPets: [],
-      /** Id of the pet currently following the player, or null. */
-      equippedPet: null,
+      /**
+       * Ids of the pets currently following the player, in the order they walk
+       * (first one leads). Their Wins bonuses add up — see petWinsMultiplier.
+       */
+      equippedPets: [],
+      /** Whether the Pets panel is open. Not saved: it starts closed every session. */
+      petsOpen: false,
+      /** Which pet's card the Pets panel is showing on the right, or null. */
+      petsSelected: null,
       unlockedTrainers: [TRAINERS[0].id],
       /** Highest stage wall ever broken (0 = none). */
       bestWall: 0,
@@ -180,19 +187,14 @@ export const useGame = create(
        * says so.
        */
       hatchEgg: (id) => {
-        const { ownedPets, equippedPet, wins, notify } = get()
+        const { ownedPets, wins, notify } = get()
         const egg = getEgg(id)
         const pet = getPet(id)
         if (!egg || !pet) return
 
+        // Already hatched: the stand doubles as a summon/dismiss switch for it.
         if (ownedPets.includes(id)) {
-          if (equippedPet === id) {
-            notify(`${pet.name} is already following you`)
-            return
-          }
-          set({ equippedPet: id })
-          notify(`${pet.name} is now following you! x${formatBonus(pet.winsBonus)} Wins`)
-          playSound('equip')
+          get().togglePet(id)
           return
         }
 
@@ -200,10 +202,81 @@ export const useGame = create(
           notify(`Need ${formatNumber(egg.cost - wins)} more Wins to hatch ${egg.name}`, 'error')
           return
         }
-        set({ wins: wins - egg.cost, ownedPets: [...ownedPets, id], equippedPet: id })
+        set({
+          wins: wins - egg.cost,
+          ownedPets: [...ownedPets, id],
+          equippedPets: [...get().equippedPets, id].slice(0, MAX_EQUIPPED),
+        })
         notify(`${egg.name} hatched into ${pet.name}! x${formatBonus(pet.winsBonus)} Wins`, 'success')
         playSound('unlock')
       },
+
+      /**
+       * Send a hatched pet out to follow, or call it back in if it already is.
+       * Unknown or unhatched ids are ignored, so the Pets panel can call this
+       * for any tile without checking first.
+       */
+      togglePet: (id) => {
+        const { ownedPets, equippedPets, notify } = get()
+        const pet = getPet(id)
+        if (!pet || !ownedPets.includes(id)) return
+
+        if (equippedPets.includes(id)) {
+          set({ equippedPets: equippedPets.filter((p) => p !== id) })
+          notify(`${pet.name} is waiting back at its egg`)
+          playSound('click')
+          return
+        }
+        if (equippedPets.length >= MAX_EQUIPPED) {
+          notify(`Only ${MAX_EQUIPPED} pets can follow you at once`, 'error')
+          return
+        }
+        set({ equippedPets: [...equippedPets, id] })
+        notify(`${pet.name} is now following you! x${formatBonus(pet.winsBonus)} Wins`)
+        playSound('equip')
+      },
+
+      /** Every hatched pet at once, best bonus leading the pack. */
+      equipAllPets: () => {
+        const { ownedPets, equippedPets, notify } = get()
+        if (ownedPets.length === 0) {
+          notify('Hatch an egg first — no pets yet', 'error')
+          return
+        }
+        const all = PETS.filter((p) => ownedPets.includes(p.id))
+          .sort((a, b) => b.winsBonus - a.winsBonus)
+          .slice(0, MAX_EQUIPPED)
+          .map((p) => p.id)
+        if (all.length === equippedPets.length && all.every((id) => equippedPets.includes(id))) {
+          notify('Every pet you own is already out')
+          return
+        }
+        set({ equippedPets: all })
+        notify(`${all.length} pets following you! x${formatBonus(petWinsMultiplier(all))} Wins`, 'success')
+        playSound('equip')
+      },
+
+      /** Send them all home, back to 1x Wins. */
+      unequipAllPets: () => {
+        if (get().equippedPets.length === 0) return
+        set({ equippedPets: [] })
+        playSound('click')
+      },
+
+      /**
+       * Open or close the Pets panel (the HUD's Pets button, and Escape).
+       * Opening it lands on the pet leading the squad, so the detail card has
+       * something in it rather than a gap until the first tap.
+       */
+      togglePetsPanel: (open) =>
+        set((s) => {
+          const next = open ?? !s.petsOpen
+          if (!next) return { petsOpen: false }
+          return { petsOpen: true, petsSelected: s.equippedPets[0] ?? s.ownedPets[0] ?? PETS[0].id }
+        }),
+
+      /** Show this pet on the Pets panel's detail card; null closes it. */
+      selectPet: (id) => set({ petsSelected: id }),
 
       /** E at a sword pad: equip it if owned, otherwise try to buy it. */
       pickSword: (id) => {
@@ -273,7 +346,7 @@ export const useGame = create(
        */
       breakCaveWall: (number, gain) =>
         set((state) => ({
-          wins: state.wins + Math.round(gain * petWinsMultiplier(state.equippedPet)),
+          wins: state.wins + Math.round(gain * petWinsMultiplier(state.equippedPets)),
           caveBest: Math.max(state.caveBest, number),
         })),
 
@@ -282,18 +355,18 @@ export const useGame = create(
        * Wins gained, or 0 if Power is too low; the pad then sends the player home.
        */
       claimPad: (number, pad) => {
-        const { power, wins, equippedPet, notify } = get()
+        const { power, wins, equippedPets, notify } = get()
         const needed = padPower(number, pad)
         if (power < needed) {
           notify(`Need ${formatNumber(needed)} Power for this Win pad`, 'error')
           return 0
         }
-        const bonus = petWinsMultiplier(equippedPet)
+        const bonus = petWinsMultiplier(equippedPets)
         const gain = Math.round(padWins(number, pad) * bonus)
         // Walls stay broken a little longer; WallField starts their rebuild countdown
         // once we've actually arrived back in the lobby (see scheduleWallReset).
         set({ wins: wins + gain, nearWall: null, interact: null, holdingSince: null })
-        const petNote = bonus > 1 ? ` (${getPet(equippedPet).name} x${formatBonus(bonus)})` : ''
+        const petNote = bonus > 1 ? ` (pets x${formatBonus(bonus)})` : ''
         notify(`+${formatNumber(gain)} Wins${petNote}! Back to the lobby`, 'success')
         playSound('win')
         return gain
@@ -345,14 +418,20 @@ export const useGame = create(
     }),
     {
       name: 'ppc-progress',
-      version: 1,
+      version: 2,
+      /** v1 had a single `equippedPet`; pets come in squads now. */
+      migrate: (state, version) => {
+        if (version >= 2 || !state) return state
+        const { equippedPet, ...rest } = state
+        return { ...rest, equippedPets: equippedPet ? [equippedPet] : [] }
+      },
       partialize: ({
         power,
         wins,
         owned,
         equipped,
         ownedPets,
-        equippedPet,
+        equippedPets,
         unlockedTrainers,
         bestWall,
         caveBest,
@@ -364,7 +443,7 @@ export const useGame = create(
         owned,
         equipped,
         ownedPets,
-        equippedPet,
+        equippedPets,
         unlockedTrainers,
         bestWall,
         caveBest,

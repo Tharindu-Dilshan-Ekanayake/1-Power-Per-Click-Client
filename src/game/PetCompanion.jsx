@@ -8,11 +8,14 @@ import { getPet } from './pets'
 import { PLAYER_HEIGHT } from './Player'
 import { PetModel } from './world/PetModel'
 
-/** How far behind the player the pet settles once it catches up. */
+/** How far behind the player the first pet settles once it catches up. */
 const HEEL_DISTANCE = 1.7
-/** And a little off to one side, so it isn't lined up dead behind the sword arm. */
-const SIDE_OFFSET = 0.4
-/** It only starts moving once further than this from its heel spot. */
+/** Each row further back sits this much deeper, and this much wider apart. */
+const ROW_DEPTH = 0.55
+const ROW_SPREAD = 0.8
+/** How far off the centre line the innermost pair walks. */
+const SIDE_OFFSET = 0.45
+/** A pet only starts moving once further than this from its heel spot. */
 const FOLLOW_SLACK = 0.6
 /** Higher = snappier catch-up. */
 const FOLLOW_SMOOTHING = 5
@@ -28,29 +31,37 @@ const _targetQuat = new Quaternion()
 const _up = new Vector3(0, 1, 0)
 
 /**
- * The equipped pet, trotting along behind the player. A ref-driven group, not
- * physics-backed: it just chases a spot behind-and-beside the player's capsule,
- * reading the same Rapier body FollowCamera does. Facing comes from the body's
- * own velocity (like RemotePlayers does for the avatar) rather than the pet's
- * own past movement, so it can't fall into a feedback loop and spin in place
- * once it's caught up.
- *
- * @param {{ bodyRef: React.MutableRefObject<any> }} props
+ * Where the i-th pet of the squad walks, relative to the player's facing: a V
+ * opening out behind them, alternating sides so the pack stays balanced and
+ * nobody rides directly in the player's tracks (or the sword's swing arc).
  */
-export function PetCompanion({ bodyRef }) {
-  const equippedId = useGame((s) => s.equippedPet)
+function slot(i) {
+  const side = i % 2 === 0 ? 1 : -1
+  const row = Math.floor(i / 2)
+  return { back: HEEL_DISTANCE + row * ROW_DEPTH, lateral: side * (SIDE_OFFSET + row * ROW_SPREAD) }
+}
+
+/**
+ * One pet, trotting along at its own spot in the formation. A ref-driven group,
+ * not physics-backed: it just chases a point behind-and-beside the player's
+ * capsule, reading the same Rapier body FollowCamera does. Facing comes from the
+ * body's own velocity (like RemotePlayers does for the avatar) rather than the
+ * pet's own past movement, so it can't fall into a feedback loop and spin in
+ * place once it's caught up.
+ *
+ * @param {{ bodyRef: React.MutableRefObject<any>, pet: object, index: number }} props
+ */
+function Follower({ bodyRef, pet, index }) {
   const groupRef = useRef(null)
   const initialised = useRef(false)
   const facing = useRef(0)
   /** Handed to PetModel so its legs trot in step with how fast it's actually moving. */
   const walkRef = useRef({ speed: 0 })
 
-  const pet = equippedId ? getPet(equippedId) : null
-
   useFrame((state, delta) => {
     const body = bodyRef.current
     const group = groupRef.current
-    if (!body || !group || !pet) return
+    if (!body || !group) return
 
     const p = body.translation()
     const v = body.linvel()
@@ -58,13 +69,11 @@ export function PetCompanion({ bodyRef }) {
 
     if (Math.hypot(v.x, v.z) > TURN_SPEED) facing.current = Math.atan2(v.x, v.z)
 
-    // Heel spot: behind wherever the player's facing, offset a little to one
-    // side, so the pet reads as a companion beside their heel rather than
-    // riding directly in their tracks (and the sword's swing arc).
+    const { back, lateral } = slot(index)
     _dir.set(Math.sin(facing.current), 0, Math.cos(facing.current))
-    _heelPos.copy(_playerPos).addScaledVector(_dir, -HEEL_DISTANCE)
-    _heelPos.x += Math.cos(facing.current) * SIDE_OFFSET
-    _heelPos.z -= Math.sin(facing.current) * SIDE_OFFSET
+    _heelPos.copy(_playerPos).addScaledVector(_dir, -back)
+    _heelPos.x += Math.cos(facing.current) * lateral
+    _heelPos.z -= Math.sin(facing.current) * lateral
 
     if (!initialised.current) {
       group.position.copy(_heelPos)
@@ -86,15 +95,32 @@ export function PetCompanion({ bodyRef }) {
     group.quaternion.slerp(_targetQuat, 1 - Math.pow(0.001, delta * (TURN_SMOOTHING / 10)))
   })
 
-  if (!pet) return null
-
   return (
-    <group ref={groupRef} scale={1}>
+    <group ref={groupRef}>
       <PetModel pet={pet} walkRef={walkRef} />
       {(pet.glow ?? 0) > 0 && (
         <Sparkles count={8} scale={[0.9, 0.9, 0.9]} position={[0, 0.35, 0]} size={2.5} speed={0.4} color={pet.colors.accent} />
       )}
     </group>
+  )
+}
+
+/**
+ * The whole squad of equipped pets (see the Pets panel), each walking its own
+ * slot in the formation behind the player.
+ *
+ * @param {{ bodyRef: React.MutableRefObject<any> }} props
+ */
+export function PetCompanion({ bodyRef }) {
+  const equipped = useGame((s) => s.equippedPets)
+
+  return (
+    <>
+      {equipped.map((id, i) => {
+        const pet = getPet(id)
+        return pet ? <Follower key={id} bodyRef={bodyRef} pet={pet} index={i} /> : null
+      })}
+    </>
   )
 }
 

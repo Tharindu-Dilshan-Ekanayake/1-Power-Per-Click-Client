@@ -14,12 +14,13 @@ export function Controls() {
   ]
 
   return (
-    <div className="pointer-events-none absolute left-4 top-40 z-10 rounded-xl bg-black/50 px-3 py-2 text-xs text-white/80 backdrop-blur">
-      {rows.map(([key, action]) => (
-        <div key={key}>
-          <span className="font-semibold text-white">{key}</span> {action}
+    <div className="">
+      {/* {rows.map(([key, action]) => (
+       <div key={key}>
+        <span className="font-semibold text-white">{key}</span> {action}
         </div>
-      ))}
+      ))} */}
+      
     </div>
   )
 }

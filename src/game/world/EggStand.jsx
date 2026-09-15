@@ -76,7 +76,7 @@ export function EggStand({ egg, position }) {
   const pet = getPet(egg.id)
 
   const owned = useGame((s) => s.ownedPets.includes(egg.id))
-  const equipped = useGame((s) => s.equippedPet === egg.id)
+  const equipped = useGame((s) => s.equippedPets.includes(egg.id))
 
   useFrame(({ clock }, delta) => {
     const t = clock.elapsedTime
@@ -188,7 +188,7 @@ export function EggStand({ egg, position }) {
         (owned ? (
           <InteractPrompt
             position={[0, 1.8, 0]}
-            action={equipped ? 'Following' : 'Summon'}
+            action={equipped ? 'Dismiss' : 'Summon'}
             title={pet.name}
             detail={`🏆 x${formatBonus(pet.winsBonus)} Wins`}
             tone={equipped ? 'done' : 'normal'}
