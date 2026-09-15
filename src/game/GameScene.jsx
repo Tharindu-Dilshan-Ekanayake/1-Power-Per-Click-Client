@@ -7,6 +7,7 @@ import { useBloxity } from '../bloxity/BloxityContext'
 import FollowCamera from './FollowCamera'
 import { useLoading } from './loadingStore'
 import NetSync from './NetSync'
+import PetCompanion from './PetCompanion'
 import Player from './Player'
 import RemotePlayers from './RemotePlayers'
 import SwingInput from './SwingInput'
@@ -119,6 +120,7 @@ export function GameScene() {
             position={SPAWN}
             onAvatarReady={handleAvatarReady}
           />
+          <PetCompanion bodyRef={playerBodyRef} />
           {/* The other players in our lobby, and sending ours (after each physics step). */}
           <RemotePlayers />
           <NetSync bodyRef={playerBodyRef} />

@@ -7,6 +7,7 @@ import { AdditiveBlending, Vector3 } from 'three'
 import { formatNumber } from '../format'
 import { useGame } from '../gameStore'
 import { DUMMY_OFFSET_Z } from '../trainers'
+import { remoteStates, useLobby } from '../../net/lobbyClient'
 import { Label } from './Effects'
 import InteractPrompt from './InteractPrompt'
 import PadGlow from './PadGlow'
@@ -44,7 +45,7 @@ const popupTexture = (gain) =>
  *   The dummy stands on the pad's local -Z side; `rotationY` turns the whole pad.
  */
 export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }) {
-  const status = useGame((s) =>
+  const localStatus = useGame((s) =>
     s.activeTrainer === trainer.id
       ? 'active'
       : s.unlockedTrainers.includes(trainer.id)
@@ -53,6 +54,10 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
           ? 'affordable'
           : 'locked',
   )
+  // Someone else training here shows the same "TRAINING!" glow, even though it's
+  // not us - other players' training pads should look alive to us too.
+  const remoteActive = useLobby((s) => Object.values(s.players).some((p) => p.trainer === trainer.id))
+  const status = localStatus === 'active' || remoteActive ? 'active' : localStatus
   const active = status === 'active'
   const offered = useGame((s) => s.interact?.kind === 'trainer' && s.interact.id === trainer.id)
 
@@ -60,7 +65,7 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
   const flash = useRef(null)
   const padMaterial = useRef(null)
   const popups = useRef([])
-  const fx = useRef({ seenSwing: -Infinity, hitAt: -Infinity, next: 0, spawned: [] })
+  const fx = useRef({ seenSwing: -Infinity, hitAt: -Infinity, next: 0, spawned: [], remoteSw: new Map() })
 
   useFrame(({ camera, clock }) => {
     const now = performance.now() / 1000
@@ -80,6 +85,19 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
         mesh.material.map = popupTexture(game.lastGain)
         mesh.userData.x = (Math.random() - 0.5) * 1.4
       }
+    }
+
+    // Other players' swings while training here: the same wobble and flash, just
+    // without a number popup - we don't know their exact Power gain. Detected off
+    // their already-networked position track (its swing counter), not a separate
+    // message, so no extra traffic.
+    for (const [id, p] of Object.entries(useLobby.getState().players)) {
+      if (p.trainer !== trainer.id) continue
+      const track = remoteStates.get(id)
+      if (!track) continue
+      const seen = s.remoteSw.get(id) ?? track.sw
+      if (track.sw > seen) s.hitAt = now
+      s.remoteSw.set(id, track.sw)
     }
 
     // Knocked back, then a damped rock about the base.

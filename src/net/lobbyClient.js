@@ -1,16 +1,19 @@
+import { Client } from '@colyseus/sdk'
 import { create } from 'zustand'
 
 import { addSnapshot, newTrack } from './snapshots'
 
 /**
- * Connection to the lobby server (see the server's realtime.js for the protocol).
+ * Connection to the lobby server, over Colyseus (see the server's lobbyRoom.js for
+ * the protocol - the message types match one-for-one, 'hello' aside: joining the
+ * room already carries the profile that used to be sent as a first message).
  * Joining happens automatically: the server puts us in a lobby with room. If the
  * server can't be reached the game still plays, solo, and keeps retrying.
  */
 
 /** The server's HTTP address; VITE_SERVER_URL in .env overrides the local default. */
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000'
-const WS_URL = `${SERVER_URL.replace(/^http/, 'ws').replace(/\/+$/, '')}/ws`
+const WS_URL = SERVER_URL.replace(/^http/, 'ws').replace(/\/+$/, '')
 /** Waits before each reconnect attempt; the last repeats. */
 const RETRY_MS = [1000, 2000, 5000, 10000]
 
@@ -28,86 +31,94 @@ export const useLobby = create(() => ({ status: 'connecting', lobby: null, selfI
  */
 export const remoteStates = new Map()
 
-let socket = null
-let profile = { name: 'Player', avatar: null, sword: null }
+const client = new Client(WS_URL)
+let room = null
+let profile = { name: 'Player', avatar: null, sword: null, pet: null, trainer: null }
 let stopped = true
 let retries = 0
 let retryTimer = null
-
-function send(message) {
-  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message))
-}
+/** Bumped on every connect/disconnect, so a join that resolves late (superseded
+ *  by a newer connect, or a disconnect while it was in flight) knows to back out
+ *  instead of resurrecting a connection nobody wants any more. */
+let connectId = 0
 
 function profileOf(player, previous) {
   // Keep the same avatar object when it hasn't changed, so the model isn't rebuilt
   // just because the player switched swords.
   const avatar =
     previous && JSON.stringify(previous.avatar) === JSON.stringify(player.avatar) ? previous.avatar : player.avatar
-  return { name: player.name, avatar, sword: player.sword }
+  return { name: player.name, avatar, sword: player.sword, pet: player.pet, trainer: player.trainer }
 }
 
-function handle(message) {
-  const { players, selfId } = useLobby.getState()
-  switch (message.t) {
-    case 'welcome': {
-      remoteStates.clear()
-      const next = {}
-      for (const player of message.players) {
-        next[player.id] = profileOf(player)
-        remoteStates.set(player.id, newTrack(player.p, player.sw, performance.now()))
-      }
-      useLobby.setState({ status: 'online', lobby: message.lobby, selfId: message.id, players: next })
-      break
-    }
-    case 'join':
-      remoteStates.set(message.player.id, newTrack(message.player.p, message.player.sw, performance.now()))
-      useLobby.setState({ players: { ...players, [message.player.id]: profileOf(message.player) } })
-      break
-    case 'leave': {
-      remoteStates.delete(message.id)
-      const next = { ...players }
-      delete next[message.id]
-      useLobby.setState({ players: next })
-      break
-    }
-    case 'profile':
-      if (players[message.id]) {
-        useLobby.setState({ players: { ...players, [message.id]: profileOf(message, players[message.id]) } })
-      }
-      break
-    case 'states':
-      for (const [id, x, y, z, sw, ts] of message.s) {
-        if (id === selfId) continue
-        const state = remoteStates.get(id)
-        if (state) addSnapshot(state, [x, y, z], sw, ts, performance.now())
-      }
-      break
-    default:
-  }
+function retry() {
+  if (stopped) return
+  retryTimer = setTimeout(open, RETRY_MS[Math.min(retries++, RETRY_MS.length - 1)])
 }
 
-function open() {
-  useLobby.setState({ status: 'connecting' })
-  const ws = new WebSocket(WS_URL)
-  socket = ws
-  ws.onopen = () => {
-    retries = 0
-    ws.send(JSON.stringify({ t: 'hello', ...profile }))
-  }
-  ws.onmessage = (event) => {
-    try {
-      handle(JSON.parse(event.data))
-    } catch (err) {
-      console.warn('[lobby] bad message from server', err)
+/** Wires up a just-joined room's message handlers and disconnect/retry behaviour. */
+function attach(joined) {
+  joined.onMessage('welcome', (message) => {
+    remoteStates.clear()
+    const next = {}
+    for (const player of message.players) {
+      next[player.id] = profileOf(player)
+      remoteStates.set(player.id, newTrack(player.p, player.sw, performance.now()))
     }
-  }
-  ws.onclose = () => {
-    if (socket !== ws) return
-    socket = null
+    useLobby.setState({ status: 'online', lobby: message.lobby, selfId: message.id, players: next })
+  })
+  joined.onMessage('join', (message) => {
+    remoteStates.set(message.player.id, newTrack(message.player.p, message.player.sw, performance.now()))
+    useLobby.setState({ players: { ...useLobby.getState().players, [message.player.id]: profileOf(message.player) } })
+  })
+  joined.onMessage('leave', (message) => {
+    remoteStates.delete(message.id)
+    const next = { ...useLobby.getState().players }
+    delete next[message.id]
+    useLobby.setState({ players: next })
+  })
+  joined.onMessage('profile', (message) => {
+    const { players } = useLobby.getState()
+    if (players[message.id]) {
+      useLobby.setState({ players: { ...players, [message.id]: profileOf(message, players[message.id]) } })
+    }
+  })
+  joined.onMessage('states', (message) => {
+    const { selfId } = useLobby.getState()
+    for (const [id, x, y, z, sw, ts] of message.s) {
+      if (id === selfId) continue
+      const state = remoteStates.get(id)
+      if (state) addSnapshot(state, [x, y, z], sw, ts, performance.now())
+    }
+  })
+  joined.onLeave(() => {
+    if (room !== joined) return
+    room = null
     remoteStates.clear()
     useLobby.setState({ status: 'offline', lobby: null, selfId: null, players: {} })
-    if (!stopped) retryTimer = setTimeout(open, RETRY_MS[Math.min(retries++, RETRY_MS.length - 1)])
+    retry()
+  })
+}
+
+async function open() {
+  const id = ++connectId
+  useLobby.setState({ status: 'connecting' })
+  let joined
+  try {
+    joined = await client.joinOrCreate('lobby', { ...profile })
+  } catch (err) {
+    console.warn('[lobby] connect failed', err)
+    retry()
+    return
   }
+  if (id !== connectId || stopped) {
+    // A newer connect() (or a disconnectLobby()) beat us here - don't leave two
+    // lobby memberships alive for one player.
+    joined.leave()
+    return
+  }
+  retries = 0
+  room = joined
+  attach(joined)
 }
 
 /** Connects (and keeps reconnecting) using the latest profile. */
@@ -119,10 +130,11 @@ export function connectLobby() {
 
 export function disconnectLobby() {
   stopped = true
+  connectId++
   clearTimeout(retryTimer)
-  const ws = socket
-  socket = null
-  ws?.close()
+  const joined = room
+  room = null
+  joined?.leave()
   remoteStates.clear()
   useLobby.setState({ status: 'offline', lobby: null, selfId: null, players: {} })
 }
@@ -130,7 +142,7 @@ export function disconnectLobby() {
 /** Our name / avatar / sword. Remembered for (re)connects and sent now if online. */
 export function updateProfile(next) {
   profile = next
-  send({ t: 'profile', ...next })
+  room?.send('profile', next)
 }
 
 /**
@@ -138,5 +150,5 @@ export function updateProfile(next) {
  * our clock) that position is for.
  */
 export function sendState(p, sw, ts = performance.now()) {
-  send({ t: 'state', p, sw, ts: Math.round(ts) })
+  room?.send('state', { p, sw, ts: Math.round(ts) })
 }

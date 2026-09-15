@@ -15,6 +15,12 @@ export function formatNumber(n) {
   return String(Math.floor(n))
 }
 
+/**
+ * A multiplier, without a trailing ".0" on the round ones: 1.25 → "1.25", 8 → "8".
+ * Used for the pet Wins bonus on the HUD, egg signs and payout toasts.
+ */
+export const formatBonus = (n) => String(+n.toFixed(2))
+
 /** Rounds to two significant figures, so balance numbers stay tidy (1234 → 1200). */
 export function tidy(n) {
   if (n < 100) return Math.round(n)

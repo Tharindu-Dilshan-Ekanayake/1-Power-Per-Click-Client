@@ -317,21 +317,24 @@ export function buildLayout() {
   })
 
   // --- Egg zone --------------------------------------------------------------------
-  // Two rows of four, the pricier row on a ledge along the wall.
+  // Two rows of five (one per egg), the pricier row on a ledge along the wall, the
+  // back row offset half a step so each sign shows through the gap in front of it.
   const EGG_Z = midZ(ZONES.eggs)
-  const EGG_STEP = 4.5
+  const EGG_PER_ROW = 5
+  const EGG_STEP = 3.6
+  const eggRowHalf = ((EGG_PER_ROW - 1) * EGG_STEP) / 2
+  const eggRowTop = EGG_Z + eggRowHalf + EGG_STEP / 2
   const eggStands = EGGS.map((egg, i) => {
-    const front = i < PER_ROW
-    const slot = front ? i : i - PER_ROW
-    const rowTop = EGG_Z + 6.75
+    const front = i < EGG_PER_ROW
+    const slot = front ? i : i - EGG_PER_ROW
     return {
       egg,
       position: front
-        ? [L - 12, 0, rowTop - EGG_STEP / 2 - slot * EGG_STEP]
-        : [L - 4, LEDGE_H, rowTop - slot * EGG_STEP],
+        ? [L - 12, 0, eggRowTop - EGG_STEP / 2 - slot * EGG_STEP]
+        : [L - 4, LEDGE_H, eggRowTop - slot * EGG_STEP],
     }
   })
-  hill(L - 8, EGG_Z - 9, L, EGG_Z + 9, LEDGE_H)
+  hill(L - 8, EGG_Z - eggRowHalf - 2.5, L, EGG_Z + eggRowHalf + EGG_STEP + 2.5, LEDGE_H)
 
   /**
    * Checkered billboard on two tall black posts, standing against a side wall.
