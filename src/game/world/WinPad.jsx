@@ -1,4 +1,4 @@
-import { Billboard, Sparkles } from '@react-three/drei'
+import { Billboard } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { useRef } from 'react'
@@ -6,8 +6,9 @@ import { AdditiveBlending, DoubleSide } from 'three'
 
 import { formatNumber } from '../format'
 import { useGame } from '../gameStore'
-import { HOLD_S, padPower, padWins } from '../walls'
-import { Label } from './Effects'
+import { getPass } from '../passes'
+import { HOLD_S, padPower, padUnlocked, padWins } from '../walls'
+import { Label, Sparkle } from './Effects'
 import InteractPrompt, { HOLD_RING } from './InteractPrompt'
 import { beamTexture, radialGlowTexture, shade, studTexture } from './textures'
 import { SPAWN } from './themes'
@@ -20,6 +21,10 @@ const BEAM_H = 3.2
  * around the key, then you're paid the pad's Wins and sent back to the lobby, where
  * every broken wall rebuilds.
  *
+ * The left-hand blue pad is Bux-gated instead (`pad.pass`, see walls.js). Locked, the
+ * same hold on E opens the SDK's purchase modal rather than paying out — holding
+ * rather than tapping on purpose, so a stray key press can never start a payment.
+ *
  * @param {{ number: number, pad: object, position: number[] }} props
  *   `number` is the wall it stands before; `pad` is an entry of WIN_PADS.
  */
@@ -27,7 +32,8 @@ export function WinPad({ number, pad, position }) {
   const key = `${number}:${pad.id}`
   const needed = padPower(number, pad)
   const gain = padWins(number, pad)
-  const unlocked = useGame((s) => s.power >= needed)
+  const pass = pad.pass ? getPass(pad.pass) : null
+  const unlocked = useGame((s) => padUnlocked(number, pad, s))
   const inRange = useGame((s) => s.interact?.kind === 'pad' && s.interact.id === key)
 
   const top = useRef(null)
@@ -37,11 +43,18 @@ export function WinPad({ number, pad, position }) {
   /** The player's rigid body, from the sensor, for the trip home. */
   const playerBody = useRef(null)
 
+  // How brightly a *locked* pad burns. A Bux pad is for sale, not out of reach, so
+  // it keeps most of its glow to advertise itself; a pad that just needs more Power
+  // goes all but dark.
+  const dim = pass ? 0.55 : 0.2
+
   useFrame(({ clock }) => {
     const pulse = 0.5 + 0.5 * Math.sin(clock.elapsedTime * 3 + number)
-    if (top.current) top.current.emissiveIntensity = unlocked ? (inRange ? 1.1 : 0.75) + 0.15 * pulse : 0.12
-    if (halo.current) halo.current.opacity = unlocked ? 0.55 + 0.2 * pulse : 0.1
-    if (beam.current) beam.current.opacity = unlocked ? 0.22 + 0.1 * pulse : 0
+    if (top.current) {
+      top.current.emissiveIntensity = unlocked ? (inRange ? 1.1 : 0.75) + 0.15 * pulse : dim * (0.5 + 0.3 * pulse)
+    }
+    if (halo.current) halo.current.opacity = unlocked ? 0.55 + 0.2 * pulse : dim * 0.4
+    if (beam.current) beam.current.opacity = unlocked ? 0.22 + 0.1 * pulse : dim * 0.18
 
     const game = useGame.getState()
     const held = game.interact?.kind === 'pad' && game.interact.id === key && game.holdingSince !== null
@@ -49,6 +62,14 @@ export function WinPad({ number, pad, position }) {
     if (ring.current) ring.current.style.strokeDashoffset = String(HOLD_RING * (1 - Math.min(1, progress)))
 
     if (progress >= 1) {
+      // Held long enough. A locked Bux pad buys itself; anything else cashes in.
+      if (pass && !unlocked) {
+        // Drop the hold first: the modal takes over the screen and the keyup that
+        // ends it lands on the SDK's overlay, not on us.
+        game.interactEnd()
+        game.buyPass(pass.id)
+        return
+      }
       const body = playerBody.current
       if (game.claimPad(number, pad) && body) {
         body.setTranslation({ x: SPAWN[0], y: SPAWN[1], z: SPAWN[2] }, true)
@@ -82,7 +103,7 @@ export function WinPad({ number, pad, position }) {
         <meshStandardMaterial
           ref={top}
           map={map}
-          color={unlocked ? '#ffffff' : '#8a8a8a'}
+          color={unlocked ? '#ffffff' : pass ? '#cfe4ee' : '#8a8a8a'}
           emissive={pad.color}
           emissiveMap={map}
           emissiveIntensity={0.75}
@@ -117,9 +138,9 @@ export function WinPad({ number, pad, position }) {
           toneMapped={false}
         />
       </mesh>
-      {unlocked && (
-        <Sparkles
-          count={18}
+      {(unlocked || pass) && (
+        <Sparkle
+          count={unlocked ? 18 : 10}
           scale={[SIZE, BEAM_H, SIZE]}
           position={[0, BEAM_H / 2, 0]}
           size={5}
@@ -131,28 +152,46 @@ export function WinPad({ number, pad, position }) {
       <Billboard position={[0, 3.2, 0]}>
         <Label
           lines={[
-            { text: `+${formatNumber(gain)} Wins`, icon: 'trophy', fill: unlocked ? pad.fill : ['#e0e0e0', '#9a9a9a'] },
+            ...(pass && !unlocked ? [{ text: 'VIP', scale: 0.7, fill: pad.fill }] : []),
+            {
+              text: `+${formatNumber(gain)} Wins`,
+              icon: 'trophy',
+              // A locked Bux pad keeps its colours: the number is the sales pitch.
+              fill: unlocked || pass ? pad.fill : ['#e0e0e0', '#9a9a9a'],
+            },
             unlocked
               ? { text: 'HOLD E TO CLAIM', scale: 0.55, fill: '#ffffff' }
-              : { text: `NEED ${formatNumber(needed)} POWER`, scale: 0.55, fill: '#ff8a8a' },
+              : pass
+                ? { text: `HOLD E - ${pass.bux} BUX`, scale: 0.55, fill: '#bff1ff' }
+                : { text: `NEED ${formatNumber(needed)} POWER`, scale: 0.55, fill: '#ff8a8a' },
           ]}
           position={[0, 0, 0]}
-          size={[3.8, 1.5]}
+          size={[3.8, pass && !unlocked ? 2 : 1.5]}
           style={{ width: 384 }}
         />
       </Billboard>
 
-      {inRange && (
-        <InteractPrompt
-          position={[0, 1.2, 0]}
-          hold
-          ringRef={ring}
-          action={unlocked ? 'Hold E' : 'Locked'}
-          title={`+${formatNumber(gain)} Wins`}
-          detail={unlocked ? 'Cash in and go back to the lobby' : `Need ${formatNumber(needed)} Power`}
-          tone={unlocked ? 'normal' : 'warn'}
-        />
-      )}
+      {inRange &&
+        (pass && !unlocked ? (
+          <InteractPrompt
+            position={[0, 1.2, 0]}
+            hold
+            ringRef={ring}
+            action="Hold E"
+            title={`Buy ${pass.name}`}
+            detail={`${pass.bux} Bux  -  x${pad.wins} Wins at every stage, forever`}
+          />
+        ) : (
+          <InteractPrompt
+            position={[0, 1.2, 0]}
+            hold
+            ringRef={ring}
+            action={unlocked ? 'Hold E' : 'Locked'}
+            title={`+${formatNumber(gain)} Wins`}
+            detail={unlocked ? 'Cash in and go back to the lobby' : `Need ${formatNumber(needed)} Power`}
+            tone={unlocked ? 'normal' : 'warn'}
+          />
+        ))}
 
       <RigidBody type="fixed" colliders={false}>
         <CuboidCollider

@@ -1,10 +1,10 @@
-import { Sparkles } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { useRef } from 'react'
 import { AdditiveBlending, DoubleSide } from 'three'
 
 import { useGame } from '../gameStore'
+import { Sparkle } from './Effects'
 import { radialGlowTexture, swirlTexture } from './textures'
 
 const CENTER_Y = 4.2
@@ -75,7 +75,7 @@ export function Portal({ position, rotationY = 0, target, requiresWall = 0 }) {
           toneMapped={false}
         />
       </mesh>
-      <Sparkles
+      <Sparkle
         count={50}
         scale={[6, 7, 2]}
         position={[0, CENTER_Y, 0.8]}

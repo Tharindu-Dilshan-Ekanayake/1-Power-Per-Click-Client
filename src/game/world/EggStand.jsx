@@ -1,4 +1,4 @@
-import { Billboard, Sparkles } from '@react-three/drei'
+import { Billboard } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { useRef } from 'react'
@@ -7,7 +7,7 @@ import { AdditiveBlending } from 'three'
 import { formatBonus, formatNumber } from '../format'
 import { useGame } from '../gameStore'
 import { getPet } from '../pets'
-import { Label } from './Effects'
+import { Label, Sparkle } from './Effects'
 import InteractPrompt from './InteractPrompt'
 import { radialGlowTexture, shade } from './textures'
 import { PetModel } from './PetModel'
@@ -140,7 +140,7 @@ export function EggStand({ egg, position }) {
               />
             </mesh>
           </Billboard>
-          <Sparkles
+          <Sparkle
             count={16}
             scale={[2.6, EGG_HEIGHT + 1, 2.6]}
             position={[0, STAND_TOP + EGG_HEIGHT / 2, 0]}

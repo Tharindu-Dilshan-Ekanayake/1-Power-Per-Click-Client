@@ -1,4 +1,4 @@
-import { Billboard, Sparkles } from '@react-three/drei'
+import { Billboard } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { useRef } from 'react'
@@ -8,7 +8,7 @@ import { formatNumber } from '../format'
 import { useGame } from '../gameStore'
 import { DUMMY_OFFSET_Z } from '../trainers'
 import { remoteStates, useLobby } from '../../net/lobbyClient'
-import { Label } from './Effects'
+import { Label, Sparkle } from './Effects'
 import InteractPrompt from './InteractPrompt'
 import PadGlow from './PadGlow'
 import { labelTexture, radialGlowTexture, shade, studTexture, targetTexture } from './textures'
@@ -222,7 +222,7 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
       </group>
 
       {active && (
-        <Sparkles
+        <Sparkle
           count={24}
           scale={[2.6, 3.2, 2.6]}
           position={[0, 1.8, DUMMY_OFFSET_Z]}

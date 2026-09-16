@@ -1,9 +1,10 @@
-import { Billboard, Sparkles } from '@react-three/drei'
+import { Billboard } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import { AdditiveBlending } from 'three'
 
 import SwordModel from '../SwordModel'
+import { Sparkle } from './Effects'
 import { radialGlowTexture } from './textures'
 
 /**
@@ -41,7 +42,7 @@ export function SwordStatue({ position, sword, scale = 3 }) {
           />
         </mesh>
       </Billboard>
-      <Sparkles
+      <Sparkle
         count={40}
         scale={[3, gripY + 1, 3]}
         position={[0, gripY / 2, 0]}

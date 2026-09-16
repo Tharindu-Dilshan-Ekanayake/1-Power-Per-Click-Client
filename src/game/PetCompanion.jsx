@@ -1,4 +1,3 @@
-import { Sparkles } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import { Quaternion, Vector3 } from 'three'
@@ -6,6 +5,7 @@ import { Quaternion, Vector3 } from 'three'
 import { useGame } from './gameStore'
 import { getPet } from './pets'
 import { PLAYER_HEIGHT } from './Player'
+import { Sparkle } from './world/Effects'
 import { PetModel } from './world/PetModel'
 
 /** How far behind the player the first pet settles once it catches up. */
@@ -99,7 +99,7 @@ function Follower({ bodyRef, pet, index }) {
     <group ref={groupRef}>
       <PetModel pet={pet} walkRef={walkRef} />
       {(pet.glow ?? 0) > 0 && (
-        <Sparkles count={8} scale={[0.9, 0.9, 0.9]} position={[0, 0.35, 0]} size={2.5} speed={0.4} color={pet.colors.accent} />
+        <Sparkle count={8} scale={[0.9, 0.9, 0.9]} position={[0, 0.35, 0]} size={2.5} speed={0.4} color={pet.colors.accent} />
       )}
     </group>
   )

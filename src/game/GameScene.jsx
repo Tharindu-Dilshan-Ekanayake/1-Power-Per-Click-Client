@@ -1,5 +1,5 @@
 import { Environment, Lightformer } from '@react-three/drei'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useStore } from '@react-three/fiber'
 import { Physics } from '@react-three/rapier'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
@@ -10,9 +10,33 @@ import NetSync from './NetSync'
 import PetCompanion from './PetCompanion'
 import Player from './Player'
 import RemotePlayers from './RemotePlayers'
+import { qualityOf, useSettings } from './settings'
 import SwingInput from './SwingInput'
 import { SPAWN } from './world/themes'
 import World, { SunLight } from './world/World'
+
+/**
+ * Turns the shadow map on and off as the graphics level changes. The Canvas only
+ * reads its `shadows` prop when it builds the renderer, so switching levels mid-
+ * session has to reach `gl.shadowMap` directly - and every material already in the
+ * scene needs a recompile to pick the change up.
+ */
+function ShadowToggle({ enabled }) {
+  // Read through the store rather than useThree's selector: the renderer is being
+  // reconfigured here, not rendered from, and hook-returned values are read-only.
+  const store = useStore()
+  useEffect(() => {
+    const { gl, scene } = store.getState()
+    if (gl.shadowMap.enabled === enabled) return
+    gl.shadowMap.enabled = enabled
+    gl.shadowMap.needsUpdate = true
+    scene.traverse((o) => {
+      if (!o.material) return
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.needsUpdate = true
+    })
+  }, [enabled, store])
+  return null
+}
 
 /**
  * Fires `onFirstFrame` after the renderer has actually drawn once.
@@ -71,6 +95,9 @@ function LocalEnvironment() {
 export function GameScene() {
   const { game } = useBloxity()
   const playerBodyRef = useRef(null)
+  // Graphics level, pushed in from the portal's pause menu (see game/settings.js).
+  const quality = useSettings((s) => s.quality)
+  const { dpr, shadows } = qualityOf(quality)
 
   const [avatarReady, setAvatarReady] = useState(false)
   const loadingEnded = useRef(false)
@@ -85,6 +112,8 @@ export function GameScene() {
   const handleFirstFrame = useCallback(() => {
     if (loadingEnded.current || !avatarReady) return
     loadingEnded.current = true
+    // Everything the settings drive (audio graph, renderer, camera) exists by now.
+    game.applySettings()
     game.loadingEnd()
   }, [avatarReady, game])
 
@@ -93,6 +122,7 @@ export function GameScene() {
   useEffect(() => {
     if (!avatarReady || loadingEnded.current) return
     loadingEnded.current = true
+    game.applySettings()
     game.loadingEnd()
   }, [avatarReady, game])
 
@@ -102,10 +132,12 @@ export function GameScene() {
 
   return (
     <Canvas
-      shadows
+      shadows={shadows}
+      dpr={dpr}
       camera={{ position: [0, 5, 40], fov: 60, far: 1200 }}
       onCreated={({ gl }) => gl.setClearColor('#bfe4ff')}
     >
+      <ShadowToggle enabled={shadows} />
       <fog attach="fog" args={['#cfeaff', 140, 420]} />
       <hemisphereLight args={['#d6ecff', '#6b8f5a', 0.7]} />
       <SunLight bodyRef={playerBodyRef} />
@@ -124,10 +156,12 @@ export function GameScene() {
           {/* The other players in our lobby, and sending ours (after each physics step). */}
           <RemotePlayers />
           <NetSync bodyRef={playerBodyRef} />
+          {/* Inside Physics: the camera raycasts against the world so it can't be
+              pushed through a stage wall. It no-ops until the player body exists. */}
+          <FollowCamera bodyRef={playerBodyRef} />
         </Physics>
       </Suspense>
 
-      <FollowCamera bodyRef={playerBodyRef} />
       <SwingInput bodyRef={playerBodyRef} />
       <FirstFrameSignal onFirstFrame={handleFirstFrame} />
     </Canvas>

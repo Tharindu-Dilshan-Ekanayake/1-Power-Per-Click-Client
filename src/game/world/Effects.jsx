@@ -3,7 +3,18 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { AdditiveBlending, BackSide, DoubleSide } from 'three'
 
+import { qualityOf, useSettings } from '../settings'
 import { beamTexture, labelTexture, mulberry32, skyTexture } from './textures'
+
+/**
+ * Decorative sparkles, switched off below High graphics (see game/settings.js).
+ * Every sparkle field in the game goes through this rather than reaching for
+ * drei's component directly, so one setting turns the lot of them off.
+ */
+export function Sparkle(props) {
+  const on = useSettings((s) => qualityOf(s.quality).sparkles)
+  return on ? <Sparkles {...props} /> : null
+}
 
 /** Gradient sky dome that follows the camera, so it never clips at the far stages. */
 export function Sky() {
@@ -103,7 +114,7 @@ export function GlowPad({ position, color, radius = 1.8, beamHeight = 6 }) {
           toneMapped={false}
         />
       </mesh>
-      <Sparkles
+      <Sparkle
         count={30}
         scale={[radius * 2, beamHeight, radius * 2]}
         position={[0, beamHeight / 2, 0]}

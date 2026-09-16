@@ -1,8 +1,8 @@
-import { Sparkles } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import { AdditiveBlending, DoubleSide } from 'three'
 
+import { Sparkle } from './Effects'
 import { NEON_INSET, neonOutlineTexture, radialGlowTexture } from './textures'
 
 /** Seconds for one ring to rise from the pad to the top and fade away. */
@@ -92,7 +92,7 @@ export function PadGlow({
       ))}
 
       {sparkles > 0 && (
-        <Sparkles
+        <Sparkle
           count={sparkles}
           scale={[size * 0.8, rise, size * 0.8]}
           position={[0, y + rise / 2, 0]}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { topUp, useBux } from '../bloxity/bux'
 import { formatBonus, formatNumber } from '../game/format'
 import { powerMultiplier, useGame } from '../game/gameStore'
 import { petWinsMultiplier } from '../game/pets'
@@ -113,6 +114,25 @@ function CursorIcon({ rainbow, className }) {
         strokeWidth="6"
         strokeLinejoin="round"
       />
+    </svg>
+  )
+}
+
+/** Bloxity's Bux gem, in the same chunky outlined style as the trophy. */
+function BuxIcon({ className }) {
+  return (
+    <svg viewBox="0 0 100 100" aria-hidden="true" className={`shrink-0 ${className}`} style={ICON_SHADOW}>
+      <defs>
+        <linearGradient id="hud-bux" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#bdf3ff" />
+          <stop offset="1" stopColor="#0f87ff" />
+        </linearGradient>
+      </defs>
+      <g stroke={INK} strokeWidth="8" strokeLinejoin="round">
+        <path d="M28 10 H72 L94 40 L50 92 L6 40 Z" fill="url(#hud-bux)" />
+        {/* One waistline only: the full facet web closes up at HUD size. */}
+        <path d="M6 40 H94" fill="none" strokeWidth="6" />
+      </g>
     </svg>
   )
 }
@@ -253,8 +273,47 @@ function ClickPopups() {
 }
 
 /**
+ * Bux balance with a top-up button, under the Wins counter.
+ *
+ * Hidden entirely until a balance has actually been read (see bloxity/bux.js):
+ * signed out there is no balance, and a "0" would read as "you're broke" rather
+ * than "log in first".
+ */
+function BuxChip() {
+  const balance = useBux((s) => s.balance)
+  const busy = useBux((s) => s.busy)
+  if (balance === null) return null
+  return (
+    <div
+      className="mt-1.5 flex items-center gap-2 rounded-xl border-4 py-1 pl-2 pr-1"
+      style={{
+        borderColor: INK,
+        background: 'linear-gradient(to bottom, #123a5e, #0a1d30)',
+        boxShadow: 'inset 0 -4px 0 rgba(0,0,0,0.3), 0 4px 0 rgba(0,0,0,0.45)',
+      }}
+    >
+      <BuxIcon className="h-8 w-8" />
+      <span key={balance} className="power-bump text-3xl text-sky-200">
+        {formatNumber(balance)}
+      </span>
+      <button
+        type="button"
+        onClick={() => topUp()}
+        disabled={busy}
+        title="Top up Bux"
+        className="pointer-events-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-2 pb-0.5 text-2xl leading-none text-white transition hover:brightness-125 active:translate-y-0.5 disabled:opacity-50"
+        style={{ borderColor: INK, background: 'linear-gradient(to bottom, #3fb6ff, #0f6fd8)' }}
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
+/**
  * Big trophy and Wins total, top left under the player card, with the pet's Wins
- * multiplier under it whenever one is out (see petWinsMultiplier).
+ * multiplier under it whenever one is out (see petWinsMultiplier), and the Bux
+ * balance below that.
  */
 function WinsCounter() {
   const wins = useGame((s) => s.wins)
@@ -273,6 +332,8 @@ function WinsCounter() {
           {pets.length} pets · x{formatBonus(bonus)} Wins
         </span>
       )}
+      <BuxChip />
+      <PetsButton />
     </div>
   )
 }
@@ -394,8 +455,8 @@ export function GameHUD() {
   return (
     <>
       <ClickPopups />
+      {/* Wins, the pet bonus, Bux and the Pets button, stacked down the left rail. */}
       <WinsCounter />
-      <PetsButton />
       <PetsPanel />
       {message && <Notice message={message} />}
 

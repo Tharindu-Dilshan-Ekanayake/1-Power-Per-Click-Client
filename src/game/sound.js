@@ -9,7 +9,13 @@ import { create } from 'zustand'
  */
 
 const MUTE_KEY = 'ppc-muted'
-const VOLUME = 0.6
+/** Where the master gain sits at 100% volume; the portal's slider scales this. */
+const FULL_VOLUME = 0.6
+/** 0-1, from the portal's master_volume setting (see game/settings.js). */
+let volumeScale = 1
+
+/** The gain the master node should be at right now. */
+const targetGain = () => (useSound.getState().muted ? 0 : FULL_VOLUME * volumeScale)
 
 const readMuted = () => {
   try {
@@ -41,7 +47,7 @@ function start() {
   limiter.release.value = 0.2
   limiter.connect(ctx.destination)
   out = ctx.createGain()
-  out.gain.value = useSound.getState().muted ? 0 : VOLUME
+  out.gain.value = targetGain()
   out.connect(limiter)
   // Two seconds of white noise, shared by every hiss, whoosh and crunch.
   noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate)
@@ -74,10 +80,22 @@ export function setMuted(muted) {
   } catch {
     // Private browsing: it just won't be remembered.
   }
-  if (out) out.gain.setTargetAtTime(muted ? 0 : VOLUME, ctx.currentTime, 0.03)
+  if (out) out.gain.setTargetAtTime(targetGain(), ctx.currentTime, 0.03)
 }
 
 export const toggleMuted = () => setMuted(!useSound.getState().muted)
+
+/**
+ * Master volume as a 0-1 fraction, from the portal's slider. Muting still wins:
+ * the speaker button and the slider are independent, and either one at zero means
+ * silence.
+ */
+export function setMasterVolume(fraction) {
+  const next = Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 1
+  if (next === volumeScale) return
+  volumeScale = next
+  if (out && ctx) out.gain.setTargetAtTime(targetGain(), ctx.currentTime, 0.03)
+}
 
 // --- Building blocks ----------------------------------------------------------------
 
