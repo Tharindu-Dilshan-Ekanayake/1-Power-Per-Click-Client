@@ -46,6 +46,17 @@ const DRAG_SENSITIVITY = 0.016
 const ZOOM_SENSITIVITY = 0.01
 
 /**
+ * Radians per pixel for a finger.
+ *
+ * Lower than the mouse on purpose. A mouse can be picked up and put down, so a long
+ * turn costs nothing; a thumb has about an inch of travel before it runs out of
+ * screen, and at the mouse's rate that inch spun the camera most of the way round.
+ */
+const TOUCH_SENSITIVITY = 0.006
+/** Pixels of pinch per unit of zoom. */
+const PINCH_SENSITIVITY = 0.02
+
+/**
  * How fast the camera catches up with the player. Higher = snappier;
  * framerate-independent via the pow() smoothing below.
  *
@@ -118,11 +129,33 @@ export function FollowCamera({ bodyRef, anchorRef }) {
     let dragging = false
     let lastX = 0
     let lastY = 0
+    /**
+     * Fingers currently on the view, by pointerId.
+     *
+     * One turns the camera; two pinch to zoom, which is the only way to reach the
+     * zoom at all without a wheel. Tracked here rather than as a single "the" touch
+     * because a second finger arriving has to stop the first one from turning, or
+     * the view spins while you pinch.
+     */
+    const touches = new Map()
+    let pinch = 0
+
+    /** Distance between the first two fingers, which is what the pinch tracks. */
+    const spread = () => {
+      const [a, b] = [...touches.values()]
+      return Math.hypot(a.x - b.x, a.y - b.y)
+    }
 
     /** Whether the browser has actually taken the pointer for this drag. */
     const isLocked = () => document.pointerLockElement === el
 
     const onPointerDown = (e) => {
+      if (e.pointerType === 'touch') {
+        touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
+        el.setPointerCapture?.(e.pointerId)
+        if (touches.size === 2) pinch = spread()
+        return
+      }
       if (e.button !== 2) return // right button only
       dragging = true
       lastX = e.clientX
@@ -152,9 +185,39 @@ export function FollowCamera({ bodyRef, anchorRef }) {
       } catch {
         /* stay on the fallback */
       }
+
+    }
+
+    const onTouchMove = (e) => {
+      const previous = touches.get(e.pointerId)
+      if (!previous) return
+      const dx = e.clientX - previous.x
+      const dy = e.clientY - previous.y
+      previous.x = e.clientX
+      previous.y = e.clientY
+
+      if (touches.size >= 2) {
+        const now = spread()
+        const o = orbit.current
+        o.distance = Math.min(
+          MAX_DISTANCE,
+          Math.max(MIN_DISTANCE, o.distance - (now - pinch) * PINCH_SENSITIVITY),
+        )
+        pinch = now
+        return
+      }
+
+      const speed = TOUCH_SENSITIVITY * useSettings.getState().cameraSensitivity
+      const o = orbit.current
+      o.yaw -= dx * speed
+      o.pitch = Math.min(MAX_PITCH, Math.max(MIN_PITCH, o.pitch + dy * speed))
     }
 
     const onPointerMove = (e) => {
+      if (e.pointerType === 'touch') {
+        onTouchMove(e)
+        return
+      }
       if (!dragging) return
 
       let dx
@@ -178,6 +241,13 @@ export function FollowCamera({ bodyRef, anchorRef }) {
     }
 
     const endDrag = (e) => {
+      if (e?.pointerType === 'touch') {
+        touches.delete(e.pointerId)
+        // Still pinching with the two that are left: re-seat it, or the next move
+        // would be measured against a distance that included the finger that went.
+        if (touches.size === 2) pinch = spread()
+        return
+      }
       if (!dragging) return
       dragging = false
       if (e?.pointerId !== undefined) el.releasePointerCapture?.(e.pointerId)
@@ -192,6 +262,12 @@ export function FollowCamera({ bodyRef, anchorRef }) {
      */
     const onLockChange = () => {
       if (dragging && !isLocked()) endDrag()
+    }
+
+    /** The tab lost focus mid-gesture: drop every finger, not just the mouse. */
+    const onBlur = () => {
+      touches.clear()
+      endDrag()
     }
 
     const onWheel = (e) => {
@@ -215,7 +291,7 @@ export function FollowCamera({ bodyRef, anchorRef }) {
     // passive:false is required for preventDefault() on wheel to take effect.
     el.addEventListener('wheel', onWheel, { passive: false })
     document.addEventListener('pointerlockchange', onLockChange)
-    window.addEventListener('blur', endDrag)
+    window.addEventListener('blur', onBlur)
 
     return () => {
       el.removeEventListener('pointerdown', onPointerDown)
@@ -225,7 +301,7 @@ export function FollowCamera({ bodyRef, anchorRef }) {
       el.removeEventListener('contextmenu', onContextMenu)
       el.removeEventListener('wheel', onWheel)
       document.removeEventListener('pointerlockchange', onLockChange)
-      window.removeEventListener('blur', endDrag)
+      window.removeEventListener('blur', onBlur)
       if (document.pointerLockElement === el) document.exitPointerLock?.()
     }
   }, [gl])

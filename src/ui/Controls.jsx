@@ -1,3 +1,5 @@
+import { useTouchDevice } from '../game/device'
+
 /** [key, what it does] — the whole control scheme, in the order you meet it. */
 const ROWS = [
   ['W A S D', 'move'],
@@ -23,6 +25,11 @@ const ROWS = [
  * stays out of the way of clicks on the canvas behind it.
  */
 export function Controls() {
+  // Nothing here applies to a phone, and the list stands exactly where the
+  // thumbstick goes. TouchControls is the control scheme there.
+  const touch = useTouchDevice()
+  if (touch) return null
+
   return (
     <div className="pointer-events-none absolute bottom-60 left-4 z-10 flex flex-col gap-0.5 text-sm text-white/70">
       {ROWS.map(([key, action]) => (

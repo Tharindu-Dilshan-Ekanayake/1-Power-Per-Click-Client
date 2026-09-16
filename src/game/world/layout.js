@@ -241,7 +241,8 @@ export function buildLayout() {
   }
   // Placed clear of the zone entrances and the cross path.
   for (const z of [-26, -14, 8, 20]) lamp(-AVENUE - 1.2, z)
-  for (const z of [-27, -11, 5, 20]) lamp(AVENUE + 1.2, z)
+  // 12, not 20: the training arch's opening now runs z 14..21 (see ZONES.train).
+  for (const z of [-27, -11, 5, 12]) lamp(AVENUE + 1.2, z)
   for (const x of [13, 27]) {
     lamp(x, CROSS0 - 1.2)
     lamp(x, CROSS1 + 1.2)
@@ -305,6 +306,16 @@ export function buildLayout() {
     },
     train: {
       x0: ZONE_IN, x1: L - 1, z0: CROSS1 + 2, z1: PLAZA_Z - 2,
+      // The only zone whose arch is not in the middle of its frontage.
+      //
+      // Centred, its seven-wide opening landed square on the one strip of this zone
+      // that nothing else stands in - the lane between the avenue and the front row
+      // of dummies - which left the Bux platform nowhere to go but into the doorway.
+      // It sat there, half behind an arch post, and you met it face-on the moment you
+      // walked in. Moved to the north end the same lane is one clear eleven-metre
+      // block instead, the platform has the south end of it to itself, and the way in
+      // is a way in.
+      gate: 5,
       floor: 'floor:#ffd494,#ffc477', rail: 'floor:#ff9f1c,#ff9f1c', post: 'floor:#a85a00,#a85a00',
       board: 'floor:#ff9f1c,#f08a0a', neon: '#ffd166', title: 'TRAIN', fill: ['#fff6a8', '#ffc21a'],
     },
@@ -326,7 +337,7 @@ export function buildLayout() {
     // The arch faces the avenue; the side walls of the lobby need no fence.
     const west = name === 'swords'
     const inner = west ? x1 : x0
-    const c = midZ(zone)
+    const c = midZ(zone) + (zone.gate ?? 0)
     fence('z', inner, z0, z1, [[c - ENTRANCE / 2 - 0.8, c + ENTRANCE / 2 + 0.8]], zone.rail, zone.post)
     archGate(inner, c, ENTRANCE, west ? 1 : -1, zone)
 
@@ -417,21 +428,19 @@ export function buildLayout() {
     }
   })
 
-  // The two Bux dummies, on their own platform in the strip between the zone's arch
-  // and its front row - the one part of the training zone nothing else stands in.
+  // The two Bux dummies, on their own platform at the south end of the lane between
+  // the avenue and the front row of Wins dummies.
   //
   // The deck's centre sits east of its pads on purpose: turned the same way as the
   // Wins rows, each dummy stands 2.6 further out in +X than its own pad, so centring
   // the pads would hang both dummies over the edge.
-  // The tightest of the three, hemmed in on four sides:
-  //   west   the zone's arch, whose opening is the only way in (z 9..16)
-  //   east   the front row of Wins dummies
+  //
+  // What bounds it:
+  //   west   the zone's fence, with the arch now well north of here (z 14..21)
+  //   east   the front row of Wins dummies, whose pads start at x 19.8
   //   south  the gap cut in the south fence (x 17..23), a path in from the cross walk
-  //   north  the matching gap in the north fence, onto the plaza
-  // So the deck is narrow, sits north of the south gap and south of the north one,
-  // and leaves a 1.8 lane down either side. Walking in through the arch you pass it
-  // rather than climb it.
-  const TRAIN_VIP = [15.1, 10.5]
+  //   north  nothing until the arch - which is the point of having moved it
+  const TRAIN_VIP = [15.1, 8.5]
   /** Pad centres, west of the deck's middle: each dummy stands 2.6 further east. */
   const TRAIN_VIP_PAD_X = 14.4
   const TRAIN_VIP_SPREAD = 2.1

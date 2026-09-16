@@ -1,10 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
+
+import { releaseAll, setKeyboardJump, setKeyboardMove, setKeyboardSprint } from './input'
 
 /**
- * Keyboard state in a ref, deliberately *not* React state.
+ * Turns the keyboard into movement (see game/input.js).
  *
- * Movement is read every frame inside `useFrame`; routing keydown/keyup through
- * React state would re-render the whole scene 60x a second for no benefit.
+ * Nothing is returned and nothing re-renders: the keys are held in a module, which
+ * is where the frame loop reads them, so a walk across the lobby costs no renders at
+ * all. It is a hook only so that the listeners come and go with the scene.
  */
 const KEY_MAP = {
   KeyW: 'forward',
@@ -21,19 +24,25 @@ const KEY_MAP = {
 }
 
 export function useKeyboard() {
-  const keys = useRef({
-    forward: false,
-    backward: false,
-    left: false,
-    right: false,
-    jump: false,
-    sprint: false,
-  })
-
   useEffect(() => {
+    const held = { forward: false, backward: false, left: false, right: false }
+
+    const push = () => {
+      setKeyboardMove(
+        (held.right ? 1 : 0) - (held.left ? 1 : 0),
+        (held.backward ? 1 : 0) - (held.forward ? 1 : 0),
+      )
+    }
+
     const set = (code, value) => {
       const action = KEY_MAP[code]
-      if (action) keys.current[action] = value
+      if (!action) return
+      if (action === 'jump') setKeyboardJump(value)
+      else if (action === 'sprint') setKeyboardSprint(value)
+      else {
+        held[action] = value
+        push()
+      }
     }
 
     const onKeyDown = (e) => {
@@ -43,7 +52,8 @@ export function useKeyboard() {
     const onKeyUp = (e) => set(e.code, false)
     // Alt-tabbing away mid-run otherwise leaves a key stuck down.
     const onBlur = () => {
-      for (const action of Object.keys(keys.current)) keys.current[action] = false
+      for (const action of Object.keys(held)) held[action] = false
+      releaseAll()
     }
 
     window.addEventListener('keydown', onKeyDown)
@@ -53,10 +63,9 @@ export function useKeyboard() {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
+      onBlur()
     }
   }, [])
-
-  return keys
 }
 
 export default useKeyboard

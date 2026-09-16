@@ -2,6 +2,7 @@ import { PerspectiveCamera, View } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 
+import { useTouchDevice } from '../game/device'
 import { getEgg } from '../game/eggs'
 import { formatBonus, formatNumber } from '../game/format'
 import { useGame } from '../game/gameStore'
@@ -439,12 +440,16 @@ export function PetsPanel() {
  * appears. It used to be absolute, and the Bux chip landed on top of it.
  */
 export function PetsButton() {
+  // Half size on a phone, so the left rail stops before the thumbstick starts.
+  const touch = useTouchDevice()
   const equipped = useGame((s) => s.equippedPets.length)
   return (
     <button
       type="button"
       onClick={() => useGame.getState().togglePetsPanel()}
-      className="pointer-events-auto relative mt-2 flex h-16 w-16 cursor-pointer flex-col items-center justify-center rounded-xl border-4 transition duration-100 hover:brightness-110 active:translate-y-0.5"
+      className={`pointer-events-auto relative mt-2 flex cursor-pointer flex-col items-center justify-center rounded-xl transition duration-100 hover:brightness-110 active:translate-y-0.5 ${
+        touch ? 'h-11 w-11 border-2' : 'h-16 w-16 border-4'
+      }`}
       style={{
         borderColor: INK,
         background: 'linear-gradient(to bottom, #ffd24a, #f0a000)',
@@ -452,8 +457,8 @@ export function PetsButton() {
       }}
     >
       <span className="pointer-events-none absolute inset-x-2 top-1 h-1.5 rounded-full bg-white/35" />
-      <PawIcon className="h-9 w-9" />
-      <span className="text-sm text-white" style={CHIP}>
+      <PawIcon className={touch ? 'h-6 w-6' : 'h-9 w-9'} />
+      <span className={`text-white ${touch ? 'text-[10px]' : 'text-sm'}`} style={CHIP}>
         Pets
       </span>
       {equipped > 0 && (
