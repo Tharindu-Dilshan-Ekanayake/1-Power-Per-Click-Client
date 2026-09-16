@@ -16,11 +16,24 @@ const OUTLINE = {
 const ICON_SHADOW = { filter: 'drop-shadow(0 3px 0 rgba(0,0,0,0.85))' }
 const INK = '#1b1b25'
 
-/** Toast notice styling per tone: card border, icon gradient, text colour. */
+/**
+ * Toast notice styling per tone: the stripe and timer bar colour, the icon's
+ * gradient, and the card's own background.
+ */
 const NOTICE = {
-  success: { border: '#7dff6a', icon: ['#eaffd8', '#5fe64c'], text: 'text-lime-200' },
-  error: { border: '#ff5a5a', icon: ['#ffdede', '#ff5a5a'], text: 'text-red-200' },
-  info: { border: '#7fd8ff', icon: ['#eaf9ff', '#5cc4ff'], text: 'text-sky-100' },
+  success: { accent: '#5fe64c', icon: ['#eaffd8', '#5fe64c'], bg: ['#1d3a26', '#101f17'] },
+  error: { accent: '#ff6b6b', icon: ['#ffdede', '#ff5a5a'], bg: ['#3d1c20', '#231216'] },
+  info: { accent: '#5cc4ff', icon: ['#eaf9ff', '#5cc4ff'], bg: ['#17304a', '#111b28'] },
+}
+
+/**
+ * Toast text. Deliberately not OUTLINE: a 1.5px stroke around 20px letters closes
+ * up their counters and turns a sentence to mush. The card behind it is dark and
+ * solid, so a soft drop shadow is all the contrast it needs.
+ */
+const NOTICE_TEXT = {
+  fontFamily: '"Arial Black", "Segoe UI Black", Impact, sans-serif',
+  textShadow: '0 2px 0 rgba(0,0,0,0.55)',
 }
 
 /** Button faces for the x2 / x4 / x8 boosts: gold, orange, red. */
@@ -190,6 +203,40 @@ function PriceTag({ cost }) {
   )
 }
 
+/**
+ * The toast that says what just happened. One card, the tone carried by a stripe
+ * down its left edge, the icon in its own well, and a bar along the bottom that
+ * drains so you can see it's about to go. Keyed on the message id by the caller,
+ * so a new message replays the pop from the start.
+ *
+ * @param {{ message: { text: string, tone: 'success' | 'error' | 'info' } }} props
+ */
+function Notice({ message }) {
+  const tone = NOTICE[message.tone]
+  return (
+    <div key={message.id} className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-center px-4">
+      <div
+        className="notice-pop relative flex max-w-2xl items-center gap-3 overflow-hidden rounded-2xl border-4 py-3 pl-4 pr-5 shadow-2xl"
+        style={{ borderColor: INK, background: `linear-gradient(to bottom, ${tone.bg[0]}, ${tone.bg[1]})` }}
+      >
+        {/* The tone, read at a glance before a word of it is. */}
+        <span className="absolute inset-y-0 left-0 w-2" style={{ background: tone.accent }} />
+        <span
+          className="ml-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-2"
+          style={{ borderColor: '#00000066', background: '#00000055' }}
+        >
+          <NoticeIcon tone={message.tone} className="h-8 w-8" />
+        </span>
+        <span className="min-w-0 text-pretty text-lg leading-snug text-white sm:text-xl" style={NOTICE_TEXT}>
+          {message.text}
+        </span>
+        {/* Drains over the toast's life, so its leaving is never a surprise. */}
+        <span className="notice-timer absolute inset-x-0 bottom-0 h-1.5" style={{ background: tone.accent }} />
+      </div>
+    </div>
+  )
+}
+
 /** "⚔ +N" popups: each pops up where it started, then flies into the Power counter. */
 function ClickPopups() {
   const popups = useGame((s) => s.popups)
@@ -350,19 +397,7 @@ export function GameHUD() {
       <WinsCounter />
       <PetsButton />
       <PetsPanel />
-      {message && (
-        <div key={message.id} className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-center px-4">
-          <div
-            className="notice-pop flex max-w-xl items-center gap-3 rounded-2xl border-2 bg-slate-900/85 px-5 py-3 shadow-xl backdrop-blur"
-            style={{ borderColor: NOTICE[message.tone].border }}
-          >
-            <NoticeIcon tone={message.tone} />
-            <span className={`text-xl font-black ${NOTICE[message.tone].text}`} style={OUTLINE}>
-              {message.text}
-            </span>
-          </div>
-        </div>
-      )}
+      {message && <Notice message={message} />}
 
       <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex flex-col items-center gap-1 px-4">
         {level >= MAX_LEVEL ? (

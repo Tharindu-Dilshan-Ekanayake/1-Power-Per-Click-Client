@@ -166,3 +166,18 @@ canvas {
 .notice-pop {
   animation: notice-pop 2.4s ease-out forwards;
 }
+
+/* The bar along the bottom of a toast, draining over the same life. */
+@keyframes notice-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.notice-timer {
+  transform-origin: left;
+  animation: notice-timer 2.4s linear forwards;
+}
