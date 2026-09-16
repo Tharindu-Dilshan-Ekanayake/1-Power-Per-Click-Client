@@ -5,6 +5,7 @@ import { Quaternion, Vector3 } from 'three'
 
 import { AvatarBoundary, StandInBody } from './AvatarBoundary'
 import { useGame } from './gameStore'
+import { readInput } from './input'
 import PlayerAvatar from './PlayerAvatar'
 import { WALK_SPEED } from './progression'
 import { playSound } from './sound'
@@ -42,6 +43,8 @@ const _camRight = new Vector3()
 const _rayOrigin = new Vector3()
 const _targetQuat = new Quaternion()
 const _up = new Vector3(0, 1, 0)
+/** This frame's movement request, merged from the keyboard and the thumbstick. */
+const _wanted = { x: 0, z: 0, jump: false, sprint: false }
 
 /**
  * The player: a dynamic Rapier capsule with the assembled Bloxity avatar as its
@@ -60,7 +63,7 @@ export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalB
   const localBodyRef = useRef(null)
   const bodyRef = externalBodyRef || localBodyRef
   const visualRef = useRef(null)
-  const keys = useKeyboard()
+  useKeyboard()
   const { rapier, world } = useRapier()
 
   const jumpCooldown = useRef(0)
@@ -109,22 +112,23 @@ export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalB
 
     jumpCooldown.current = Math.max(0, jumpCooldown.current - delta)
 
-    const k = keys.current
+    const k = readInput(_wanted)
 
     // Evaluated once per frame now: both the jump gate and the avatar's pose need it.
     const grounded = isGrounded()
 
     // --- Horizontal movement, relative to camera yaw -----------------------------
-    _input.set(
-      (k.right ? 1 : 0) - (k.left ? 1 : 0),
-      0,
-      (k.backward ? 1 : 0) - (k.forward ? 1 : 0),
-    )
+    // Already a vector, and already clamped: a thumbstick can ask for half speed,
+    // where the keyboard only ever asks for all of it (see game/input.js).
+    _input.set(k.x, 0, k.z)
 
     const linvel = body.linvel()
 
-    if (_input.lengthSq() > 0) {
-      _input.normalize()
+    const push = _input.length()
+    if (push > 0.02) {
+      // Normalise the direction but keep how hard it was pushed: full deflection is
+      // a run, half is a walk. A key is always full.
+      _input.divideScalar(push)
 
       // Flatten the camera's forward onto the ground plane so W always means
       // "away from the camera", the standard 3rd-person runner feel.
@@ -145,7 +149,7 @@ export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalB
         .addScaledVector(_camRight, _input.x)
         .normalize()
 
-      const speed = MOVE_SPEED * (k.sprint ? SPRINT_MULTIPLIER : 1)
+      const speed = MOVE_SPEED * (k.sprint ? SPRINT_MULTIPLIER : 1) * Math.min(1, push)
 
       // Set velocity directly rather than accumulating impulses: gives crisp,
       // predictable runner control and no drift. Y is left to gravity.

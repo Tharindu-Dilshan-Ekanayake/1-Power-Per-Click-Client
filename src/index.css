@@ -9,9 +9,27 @@
 html,
 body,
 #root {
-  height: 100%;
+  /* dvh, not vh: a phone's address bar shrinks the viewport as you scroll and vh
+     keeps the old number, which pushed the on-screen controls off the bottom. */
+  height: 100dvh;
   margin: 0;
   overflow: hidden;
+  /* No rubber-banding, no pull-to-refresh, no text selection from a long press, and
+     no grey flash on every tap: all four of them fire constantly in a game that is
+     played by tapping and dragging. */
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* Room for the notch and the home indicator, for anything anchored to an edge. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 }
 
 /* The R3F canvas fills its container; the HUD is absolutely positioned over it. */

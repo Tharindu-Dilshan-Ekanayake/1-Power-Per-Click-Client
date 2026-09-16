@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 
+import { isTouchDevice } from './device'
+
 /**
  * Player settings, pushed in from the Bloxity portal's pause menu.
  *
@@ -58,8 +60,15 @@ export const QUALITY = {
   Ultra: { dpr: [1, 2], view: 140, shadows: true, shadowMap: 2048, sparkles: true, rings: 3, physicsHz: 60, solverIterations: 4 },
 }
 
-/** The level to fall back to for an unknown value from the portal. */
-const DEFAULT_QUALITY = 'High'
+/**
+ * The level to start at, and to fall back to for an unknown value from the portal.
+ *
+ * Phones and tablets start on Low. They are the machines this matters most for -
+ * a mid-range phone has a fraction of a desktop's fill rate and is throttled for
+ * heat besides - and a player who finds it too plain can move it up in the portal's
+ * menu, which is a far better first impression than one who finds it unplayable.
+ */
+const DEFAULT_QUALITY = isTouchDevice() ? 'Low' : 'High'
 
 export const useSettings = create(() => ({
   /** One of the QUALITY keys. */

@@ -3,11 +3,26 @@ import { useEffect, useRef } from 'react'
 import { Vector3 } from 'three'
 
 import { useGame } from './gameStore'
+import { takeSwings } from './input'
 import { AUTO_CLICKERS } from './progression'
 import { playSound } from './sound'
 
 /** Seconds between automatic swings while standing on a training pad. */
 const AUTO_TRAIN_S = 0.4
+/**
+ * How far a finger may slide and still count as a tap rather than the start of a
+ * camera drag. Generous: a thumb never lands perfectly still.
+ *
+ * Distance only, with no time limit on purpose. A limit is the obvious thing to add
+ * and it was the first thing here, at a generous-looking 400ms - and it made taps go
+ * missing on exactly the machines this is for. A finger is down for as long as the
+ * page takes to notice it, so on a phone that is busy drawing a frame the gap
+ * between the two events is the jank, not the player: the first measurement of it
+ * here came out at 624ms for what was meant to be an instant tap. Nothing else on
+ * the view wants a long press, so resting a finger and lifting it can simply be a
+ * swing, however long the rest lasted.
+ */
+const TAP_SLOP_PX = 14
 const _screen = new Vector3()
 
 /**
@@ -36,30 +51,76 @@ export function SwingInput({ bodyRef }) {
 
   useEffect(() => {
     const el = gl.domElement
-    const onPointerDown = (e) => {
-      if (e.button !== 0) return
+    /** The touch that might turn out to be a tap, if it does not become a drag. */
+    let tap = null
+
+    const swingAt = (clientX, clientY) => {
       // The player's position lets a stage wall tell which side it was hit from.
       const p = bodyRef.current?.translation()
-      useGame.getState().swing(popupPath(e.clientX, e.clientY), p && [p.x, p.y, p.z])
+      useGame.getState().swing(popupPath(clientX, clientY), p && [p.x, p.y, p.z])
       playSound('swing')
     }
+
+    const onPointerDown = (e) => {
+      // A finger has to wait: the same gesture that swings also turns the camera
+      // (see FollowCamera), and which one it was is only known when it ends.
+      if (e.pointerType === 'touch') {
+        tap = { id: e.pointerId, x: e.clientX, y: e.clientY }
+        return
+      }
+      if (e.button !== 0) return
+      swingAt(e.clientX, e.clientY)
+    }
+
+    const onPointerMove = (e) => {
+      if (!tap || tap.id !== e.pointerId) return
+      if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > TAP_SLOP_PX) tap = null
+    }
+
+    const onPointerUp = (e) => {
+      if (!tap || tap.id !== e.pointerId) return
+      const { x, y } = tap
+      tap = null
+      // It never became a drag, so it was a tap.
+      swingAt(x, y)
+    }
+
+    const onPointerCancel = () => {
+      tap = null
+    }
+
     el.addEventListener('pointerdown', onPointerDown)
-    return () => el.removeEventListener('pointerdown', onPointerDown)
+    el.addEventListener('pointermove', onPointerMove)
+    el.addEventListener('pointerup', onPointerUp)
+    el.addEventListener('pointercancel', onPointerCancel)
+    return () => {
+      el.removeEventListener('pointerdown', onPointerDown)
+      el.removeEventListener('pointermove', onPointerMove)
+      el.removeEventListener('pointerup', onPointerUp)
+      el.removeEventListener('pointercancel', onPointerCancel)
+    }
   }, [gl, bodyRef])
 
   useFrame((_state, delta) => {
     // Training and the auto clickers both swing on a timer; the fastest one wins.
     const game = useGame.getState()
+    // Swings from the on-screen sword button, which knows nothing about where the
+    // player is standing (see game/input.js).
+    const tapped = takeSwings()
+    let asked = tapped
     let interval = Infinity
     if (game.activeTrainer) interval = AUTO_TRAIN_S
     if (game.autoClick !== 'off') interval = Math.min(interval, AUTO_CLICKERS[game.autoClick].interval)
-    if (interval === Infinity) {
+    if (interval !== Infinity) {
+      autoTimer.current += delta
+      if (autoTimer.current >= interval) {
+        autoTimer.current = 0
+        asked += 1
+      }
+    } else {
       autoTimer.current = 0
-      return
     }
-    autoTimer.current += delta
-    if (autoTimer.current < interval) return
-    autoTimer.current = 0
+    if (asked === 0) return
 
     // Start the popup at the player's chest on screen.
     const rect = gl.domElement.getBoundingClientRect()
@@ -71,9 +132,12 @@ export function SwingInput({ bodyRef }) {
       x = rect.left + ((_screen.x + 1) / 2) * rect.width
       y = rect.top + ((1 - _screen.y) / 2) * rect.height
     }
-    useGame.getState().swing(popupPath(x + (Math.random() - 0.5) * 60, y), p && [p.x, p.y, p.z])
-    // Quieter than a click: these repeat for as long as you train.
-    playSound('swing', { gain: 0.45 })
+    for (let i = 0; i < asked; i++) {
+      useGame.getState().swing(popupPath(x + (Math.random() - 0.5) * 60, y), p && [p.x, p.y, p.z])
+    }
+    // A tap on the sword button is a swing the player made and should sound like
+    // one; the automatic ones repeat for as long as you train, so they stay quiet.
+    playSound('swing', tapped > 0 ? undefined : { gain: 0.45 })
   })
 
   return null

@@ -3,7 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- maximum-scale/user-scalable: a game is not a document. Pinching is the
+         camera's zoom (see FollowCamera) and a double-tap is two swings, so letting
+         the browser take either of them makes the game unplayable on a phone.
+         viewport-fit=cover puts the canvas under the notch; the HUD keeps clear of
+         it with the safe-area insets in index.css. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Power Per Click</title>
 
     <!-- Bloxity SDK. Exposes itself as window.Legion.SDK.
