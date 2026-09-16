@@ -1,6 +1,6 @@
-import { EGGS } from '../eggs'
-import { SWORDS } from '../swords'
-import { TRAINERS } from '../trainers'
+import { BUX_EGGS, WINS_EGGS } from '../eggs'
+import { BUX_SWORDS, WINS_SWORDS } from '../swords'
+import { BUX_TRAINERS, WINS_TRAINERS } from '../trainers'
 import { WALLS_PER_STAGE, wallStage, WIN_PADS } from '../walls'
 import { mulberry32 } from './textures'
 import {
@@ -24,6 +24,25 @@ import {
   WALL_H,
   WALL_T,
 } from './themes'
+
+/**
+ * The look of the three Bux platforms - one in the sword zone, one in the egg zone,
+ * one in the training zone. Purple plinth, gold deck, neon lip: nothing else in the
+ * lobby is coloured like this, which is the point. Items bought with Wins stand in
+ * the zone's own rows; items bought with Bux stand up here, well clear of them.
+ */
+const VIP_TRIM = '#3a1f6e'
+const VIP_DECK = 'floor:#ffd76a,#e0a11e'
+const VIP_NEON = '#b06bff'
+/** Deck height. Same as the shop ledges, so it is one easy jump up. */
+const VIP_H = 1.2
+/**
+ * Centre height of a VIP platform's banner. The game's camera sits low (about y 3.9,
+ * looking slightly down), so a banner much above this walks off the top of the
+ * screen as you approach - which is why the crowded platforms move their banner
+ * sideways, clear of their items, rather than lifting it over them.
+ */
+const VIP_SIGN_Y = 4.4
 
 /** The two small rooms off either side of every stage's cabin, and their doors' half-width. */
 const VIP_DOOR = 5
@@ -125,6 +144,57 @@ export function buildLayout() {
   const hill = (x0, z0, x1, z1, h) => {
     box(x0, -2, z0, x1, h - 0.5, z1, 'dirt')
     box(x0, h - 0.5, z0, x1, h, z1, 'grass')
+  }
+
+  /**
+   * A raised VIP platform centred on (cx, cz). Solid up to VIP_H so you can stand
+   * on it, with a neon kerb round the lip (no collider - it is a 0.14 step, nothing
+   * to trip on) and a floating double-sided sign above so it reads from either way
+   * you walk up to it.
+   *
+   * @returns {number} the y the items on it sit at
+   */
+  const vipPlatform = (cx, cz, halfX, halfZ, title, sign = {}) => {
+    // Where the banner hangs along the back edge. It defaults to the middle, which
+    // is right for the blades - they are thin enough to read through. An egg or a
+    // training dummy is not: parked in the middle they sit square in front of the
+    // text, and their own floating name boards land on it too. Those platforms give
+    // the banner its own lane to one side instead.
+    const signCx = sign.cx ?? cx
+    const signW = sign.w ?? Math.min(9, halfX * 2 - 0.4)
+    const [x0, x1] = [cx - halfX, cx + halfX]
+    const [z0, z1] = [cz - halfZ, cz + halfZ]
+    box(x0, -1, z0, x1, VIP_H - 0.25, z1, `panel:${VIP_TRIM}`)
+    box(x0, VIP_H - 0.25, z0, x1, VIP_H, z1, VIP_DECK)
+    // Neon kerb: four strips round the edge rather than one slab, so the deck shows.
+    box(x0, VIP_H, z0, x1, VIP_H + 0.14, z0 + 0.3, `neon:${VIP_NEON}`, false)
+    box(x0, VIP_H, z1 - 0.3, x1, VIP_H + 0.14, z1, `neon:${VIP_NEON}`, false)
+    box(x0, VIP_H, z0, x0 + 0.3, VIP_H + 0.14, z1, `neon:${VIP_NEON}`, false)
+    box(x1 - 0.3, VIP_H, z0, x1, VIP_H + 0.14, z1, `neon:${VIP_NEON}`, false)
+    // Banner across the back of the platform, on two posts, with a face either side.
+    //
+    // It went over the middle at first, hung high enough to clear the item boards
+    // underneath it - and at the height the game's own camera actually sits (about
+    // y 3.9, looking slightly down) it was straight off the top of the screen. Back
+    // here it is in shot the whole time you are walking up, and the items read in
+    // front of it rather than through it.
+    const backZ = cz - halfZ + 0.35
+    for (const px of [signCx - signW / 2 + 0.4, signCx + signW / 2 - 0.4]) {
+      box(px - 0.2, VIP_H, backZ - 0.2, px + 0.2, VIP_SIGN_Y - 0.9, backZ + 0.2, `panel:${VIP_TRIM}`, false)
+    }
+    for (const facing of [0, Math.PI]) {
+      labels.push({
+        lines: [
+          { text: title, scale: 1.25, fill: ['#ffffff', '#e9c6ff'] },
+          { text: 'BOUGHT WITH BUX', scale: 0.62, fill: ['#d6f6ff', '#2fa8ff'] },
+        ],
+        position: [signCx, VIP_SIGN_Y, backZ + (facing === 0 ? 0.13 : -0.13)],
+        rotationY: facing,
+        size: [signW, 1.9],
+        style: { bg: '#25123f', border: '#b06bff' },
+      })
+    }
+    return VIP_H
   }
 
   // --- Lobby ground ---------------------------------------------------------------
@@ -272,11 +342,13 @@ export function buildLayout() {
   // gap. A giant sword statue stands in the middle of the zone.
   const SWORD_Z = midZ(ZONES.swords)
   const SWORD_STEP = 3.9
-  const FRONT_COUNT = 10
+  // 13 on the ground and the rest on the ledge. This is as many as the zone holds:
+  // one more in the front row and its bottom pad pushes through the south fence.
+  const FRONT_COUNT = 13
   const LEDGE_H = 1.2
   const rowHalf = ((FRONT_COUNT - 1) * SWORD_STEP) / 2
   const frontStart = SWORD_Z + rowHalf
-  const swordPads = SWORDS.map((sword, i) => {
+  const swordPads = WINS_SWORDS.map((sword, i) => {
     const back = i >= FRONT_COUNT
     const slot = back ? i - FRONT_COUNT : i
     return {
@@ -286,8 +358,12 @@ export function buildLayout() {
         : [-(L - 6.8), 0, frontStart - slot * SWORD_STEP],
     }
   })
-  // The ledge is one easy jump high.
-  hill(-L, SWORD_Z - rowHalf - 2.5, -(L - 4.4), SWORD_Z + rowHalf + 2.5, LEDGE_H)
+  // The ledge is one easy jump high, and runs the length of the back row rather than
+  // the front one - the two rows are different lengths, and sizing it off the front
+  // row left the last few back-row pads hanging over the end.
+  const backTop = frontStart - SWORD_STEP / 2
+  const backBottom = backTop - (WINS_SWORDS.length - FRONT_COUNT - 1) * SWORD_STEP
+  hill(-L, backBottom - 2.5, -(L - 4.4), backTop + 2.5, LEDGE_H)
 
   // Between the zone's entrance and the front row of swords.
   const STATUE_X = -18.5
@@ -298,22 +374,81 @@ export function buildLayout() {
     crystals.push({ position: [STATUE_X + dx, 0, SWORD_Z + dz], color: '#7fdcff', scale: 0.8 })
   }
 
+  // The two Bux blades, on their own platform at the south end of the zone - past
+  // the bottom of both shop rows, so there is no mistaking them for part of the
+  // ladder.
+  //
+  // Sized and placed for the gaps AROUND it, not just for what stands on it. The
+  // first cut was 13 wide and left half a unit between its edge and the front row's
+  // pads, which is narrower than the player - you could not walk down your own shop.
+  // Now there is a 3.5 lane on the row side and 3 on the fence side.
+  const SWORD_VIP = [-17.5, -23]
+  const SWORD_VIP_SPREAD = 2.4
+  const swordVipY = vipPlatform(SWORD_VIP[0], SWORD_VIP[1], 4.5, 4.5, 'VIP BLADES')
+  BUX_SWORDS.forEach((sword, i) => {
+    const dx = i === 0 ? -SWORD_VIP_SPREAD : SWORD_VIP_SPREAD
+    swordPads.push({ sword, position: [SWORD_VIP[0] + dx, swordVipY, SWORD_VIP[1]] })
+  })
+
   // --- Training zone ---------------------------------------------------------------
   // Two rows of four facing the avenue, the pricier row along the wall with its signs
   // raised. Pads are turned to face -X, which puts each dummy (DUMMY_OFFSET_Z in the
   // pad's own frame) on the wall side of its pad.
   const TRAIN_Z = midZ(ZONES.train)
-  const TRAINER_STEP = 4
-  const PER_ROW = 4
-  const trainerPads = TRAINERS.map((trainer, i) => {
+  // Five a row at 3.8 apart is the most this zone takes: a wider step runs the end
+  // pads through the fences, a sixth pad has them overlapping each other.
+  const TRAINER_STEP = 3.8
+  const PER_ROW = 5
+  /** Z of the first pad in each row; both rows are centred on the zone. */
+  const TRAINER_START = TRAIN_Z + ((PER_ROW - 1) * TRAINER_STEP) / 2
+  const trainerPads = WINS_TRAINERS.map((trainer, i) => {
     const front = i < PER_ROW
     const slot = front ? i : i - PER_ROW
     return {
       trainer,
-      position: [front ? L - 13.2 : L - 5.2, 0, TRAIN_Z + (front ? 4.5 : 6.5) - slot * TRAINER_STEP],
+      // Both rows sit 0.8 further east than they used to. That spare room existed
+      // between the back row's dummies and the lobby wall and was doing nothing,
+      // while the lane on the other side had no room for the VIP deck AND a path.
+      position: [front ? L - 12.4 : L - 4.4, 0, TRAINER_START - slot * TRAINER_STEP],
       rotationY: -Math.PI / 2,
+      // The rows line up now rather than being staggered half a step - there is no
+      // room left to stagger them - so the back row's signs ride higher instead.
       labelY: front ? 4.9 : 6.4,
     }
+  })
+
+  // The two Bux dummies, on their own platform in the strip between the zone's arch
+  // and its front row - the one part of the training zone nothing else stands in.
+  //
+  // The deck's centre sits east of its pads on purpose: turned the same way as the
+  // Wins rows, each dummy stands 2.6 further out in +X than its own pad, so centring
+  // the pads would hang both dummies over the edge.
+  // The tightest of the three, hemmed in on four sides:
+  //   west   the zone's arch, whose opening is the only way in (z 9..16)
+  //   east   the front row of Wins dummies
+  //   south  the gap cut in the south fence (x 17..23), a path in from the cross walk
+  //   north  the matching gap in the north fence, onto the plaza
+  // So the deck is narrow, sits north of the south gap and south of the north one,
+  // and leaves a 1.8 lane down either side. Walking in through the arch you pass it
+  // rather than climb it.
+  const TRAIN_VIP = [15.1, 10.5]
+  /** Pad centres, west of the deck's middle: each dummy stands 2.6 further east. */
+  const TRAIN_VIP_PAD_X = 14.4
+  const TRAIN_VIP_SPREAD = 2.1
+  const trainVipY = vipPlatform(TRAIN_VIP[0], TRAIN_VIP[1], 2.9, 4.5, 'VIP TRAINING', { cx: 14, w: 3.2 })
+  BUX_TRAINERS.forEach((trainer, i) => {
+    trainerPads.push({
+      trainer,
+      position: [
+        TRAIN_VIP_PAD_X,
+        trainVipY,
+        TRAIN_VIP[1] + (i === 0 ? -TRAIN_VIP_SPREAD : TRAIN_VIP_SPREAD),
+      ],
+      // Same turn as the Wins rows: the dummy ends up on the far side of its pad
+      // from the walkway, and you face it with your back to the zone.
+      rotationY: -Math.PI / 2,
+      labelY: 4.9,
+    })
   })
 
   // --- Egg zone --------------------------------------------------------------------
@@ -324,7 +459,7 @@ export function buildLayout() {
   const EGG_STEP = 3.6
   const eggRowHalf = ((EGG_PER_ROW - 1) * EGG_STEP) / 2
   const eggRowTop = EGG_Z + eggRowHalf + EGG_STEP / 2
-  const eggStands = EGGS.map((egg, i) => {
+  const eggStands = WINS_EGGS.map((egg, i) => {
     const front = i < EGG_PER_ROW
     const slot = front ? i : i - EGG_PER_ROW
     return {
@@ -335,6 +470,16 @@ export function buildLayout() {
     }
   })
   hill(L - 8, EGG_Z - eggRowHalf - 2.5, L, EGG_Z + eggRowHalf + EGG_STEP + 2.5, LEDGE_H)
+
+  // The Bux egg, on its own platform in the strip between the zone's arch and the
+  // front row, at the south end where neither reaches.
+  // Pushed south of the zone's arch opening (z -22..-15), which it used to sit in
+  // the mouth of, and pulled in off both the fence and the front row.
+  const EGG_VIP = [15.4, -26]
+  /** The egg sits on the east half of the deck; the banner gets the west lane. */
+  const EGG_VIP_X = 17.3
+  const eggVipY = vipPlatform(EGG_VIP[0], EGG_VIP[1], 3.8, 3, 'VIP EGG', { cx: 13.2, w: 3.6 })
+  for (const egg of BUX_EGGS) eggStands.push({ egg, position: [EGG_VIP_X, eggVipY, EGG_VIP[1]] })
 
   /**
    * Checkered billboard on two tall black posts, standing against a side wall.

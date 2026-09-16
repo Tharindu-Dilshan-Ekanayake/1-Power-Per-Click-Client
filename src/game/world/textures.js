@@ -682,7 +682,7 @@ export function skyTexture() {
   })
 }
 
-/** Small outlined icon in an `s`-sized square at (x, y): 'trophy' or 'sword'. */
+/** Small outlined icon in an `s`-sized square at (x, y): 'trophy', 'sword' or 'bux'. */
 function drawIcon(ctx, kind, x, y, s) {
   ctx.save()
   ctx.translate(x, y)
@@ -740,13 +740,36 @@ function drawIcon(ctx, kind, x, y, s) {
     ctx.stroke()
     ctx.fillStyle = '#ffc93c'
     ctx.fill()
+  } else if (kind === 'bux') {
+    // Bloxity's gem, to mark a price paid in Bux rather than Wins.
+    const gem = ctx.createLinearGradient(0, 0, 0, 100)
+    gem.addColorStop(0, '#d6f6ff')
+    gem.addColorStop(1, '#0f87ff')
+    ctx.beginPath()
+    ctx.moveTo(28, 10)
+    ctx.lineTo(72, 10)
+    ctx.lineTo(94, 40)
+    ctx.lineTo(50, 92)
+    ctx.lineTo(6, 40)
+    ctx.closePath()
+    ctx.lineWidth = 9
+    ctx.strokeStyle = '#08243f'
+    ctx.stroke()
+    ctx.fillStyle = gem
+    ctx.fill()
+    // One waistline only; the full facet web closes up at sign size.
+    ctx.beginPath()
+    ctx.moveTo(6, 40)
+    ctx.lineTo(94, 40)
+    ctx.lineWidth = 6
+    ctx.stroke()
   }
   ctx.restore()
 }
 
 /**
  * Text sign. `lines` are strings or `{ text, scale, fill, icon }`; `fill` may be a
- * list of colours for a vertical gradient, and `icon` ('trophy' | 'sword') is drawn
+ * list of colours for a vertical gradient, and `icon` ('trophy' | 'sword' | 'bux') is drawn
  * before the text.
  */
 export function labelTexture({

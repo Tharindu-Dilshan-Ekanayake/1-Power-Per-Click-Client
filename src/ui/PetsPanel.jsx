@@ -431,14 +431,20 @@ export function PetsPanel() {
   )
 }
 
-/** The Pets button on the HUD's left rail, with how many are out on its corner. */
+/**
+ * The Pets button on the HUD's left rail, with how many are out on its corner.
+ *
+ * Laid out in the flow of the counter column rather than pinned to a `top-`, so it
+ * slides down of its own accord when the pet-bonus line or the Bux chip above it
+ * appears. It used to be absolute, and the Bux chip landed on top of it.
+ */
 export function PetsButton() {
   const equipped = useGame((s) => s.equippedPets.length)
   return (
     <button
       type="button"
       onClick={() => useGame.getState().togglePetsPanel()}
-      className="pointer-events-auto absolute left-4 top-44 z-10 flex h-16 w-16 cursor-pointer flex-col items-center justify-center rounded-xl border-4 transition duration-100 hover:brightness-110 active:translate-y-0.5"
+      className="pointer-events-auto relative mt-2 flex h-16 w-16 cursor-pointer flex-col items-center justify-center rounded-xl border-4 transition duration-100 hover:brightness-110 active:translate-y-0.5"
       style={{
         borderColor: INK,
         background: 'linear-gradient(to bottom, #ffd24a, #f0a000)',

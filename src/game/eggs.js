@@ -2,9 +2,14 @@
  * Eggs shown in the lobby's egg zone. Display only for now: hatching pets isn't
  * built yet.
  *
- * cost:   Wins to hatch one (once hatching exists)
+ * cost:   Wins to hatch one
  * colors: [base, accent] for the voxel egg
  * glow:   emissive strength
+ *
+ * bux:    set instead of `cost` on the VIP egg - it is bought with Bux and sits on
+ *         its own platform away from the rows (see world/layout.js). `sku` is the
+ *         IAP it buys, which must exist and be active in the Bloxity admin panel.
+ *         An egg with `bux` has no `cost`, so always check for it first.
  */
 export const EGGS = [
   { id: 'common', name: 'Common Egg', cost: 50, colors: ['#f4f4f4', '#cfd8e3'] },
@@ -17,7 +22,15 @@ export const EGGS = [
   { id: 'crystal', name: 'Crystal Egg', cost: 600000, colors: ['#b47cff', '#5a2aa8'], glow: 0.5 },
   { id: 'galaxy', name: 'Galaxy Egg', cost: 2500000, colors: ['#3b2a8a', '#ff7af5'], glow: 0.7 },
   { id: 'rainbow', name: 'Rainbow Egg', cost: 10000000, colors: ['#ff4fd8', '#7ff9ff'], glow: 0.8 },
+
+  // --- The Bux egg. Its pet carries the best Wins bonus in the game (see pets.js).
+  { id: 'seraph', name: 'Seraph Egg', bux: 199, sku: 'egg_seraph', colors: ['#fff4cf', '#ffc94a'], glow: 0.9 },
 ]
+
+/** The egg on the VIP platform. */
+export const BUX_EGGS = EGGS.filter((e) => e.bux)
+/** The eggs hatched with Wins - the two rows in the egg zone. */
+export const WINS_EGGS = EGGS.filter((e) => !e.bux)
 
 /** @returns the egg, or undefined for an unknown id. */
 export const getEgg = (id) => EGGS.find((e) => e.id === id)

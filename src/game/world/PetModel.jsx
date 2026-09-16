@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { createContext, useContext, useMemo, useRef } from 'react'
 
+import { unitBox, unitSpike } from './geometry'
 import { radialGlowTexture, shade } from './textures'
 
 /** Footstep dust puffs fade out over this long. */
@@ -23,8 +24,7 @@ function VoxelMaterial({ color, roughness = 0.42 }) {
 /** One voxel slab. Boxes are most of the vocabulary here, so this earns its keep. */
 function Box({ position, rotation, scale, color, roughness, shadow = true }) {
   return (
-    <mesh position={position} rotation={rotation} scale={scale} castShadow={shadow}>
-      <boxGeometry args={[1, 1, 1]} />
+    <mesh position={position} rotation={rotation} scale={scale} geometry={unitBox()} castShadow={shadow}>
       <VoxelMaterial color={color} roughness={roughness} />
     </mesh>
   )
@@ -33,8 +33,7 @@ function Box({ position, rotation, scale, color, roughness, shadow = true }) {
 /** A 4-sided pyramid - ears, fur spikes, horns and claws are all made of these. */
 function Spike({ position, rotation, scale, color, shadow = false }) {
   return (
-    <mesh position={position} rotation={rotation} scale={scale} castShadow={shadow}>
-      <coneGeometry args={[1, 1, 4]} />
+    <mesh position={position} rotation={rotation} scale={scale} geometry={unitSpike()} castShadow={shadow}>
       <VoxelMaterial color={color} roughness={0.5} />
     </mesh>
   )
@@ -628,20 +627,18 @@ export function PetModel({ pet, walkRef }) {
                   key={side}
                   position={[side * (s.head.size[0] / 2 + 0.005), eyeY - 0.07, faceZ - 0.06]}
                   scale={[0.01, 0.05, 0.075]}
+                  geometry={unitBox()}
                 >
-                  <boxGeometry args={[1, 1, 1]} />
                   <meshStandardMaterial color={colors.accent} transparent opacity={0.55} roughness={0.6} flatShading />
                 </mesh>
               ))}
               {/* Eyes - blocky pixels with a highlight square each. */}
               {[1, -1].map((side) => (
                 <group key={side} position={[side * eyeX, eyeY, faceZ]}>
-                  <mesh scale={[0.075, 0.09, 0.03]}>
-                    <boxGeometry args={[1, 1, 1]} />
+                  <mesh scale={[0.075, 0.09, 0.03]} geometry={unitBox()}>
                     <meshStandardMaterial color={colors.eye} roughness={0.15} flatShading />
                   </mesh>
-                  <mesh position={[0.018, 0.022, 0.02]} scale={[0.028, 0.03, 0.02]}>
-                    <boxGeometry args={[1, 1, 1]} />
+                  <mesh position={[0.018, 0.022, 0.02]} scale={[0.028, 0.03, 0.02]} geometry={unitBox()}>
                     <meshStandardMaterial color="#ffffff" roughness={0.1} flatShading />
                   </mesh>
                 </group>

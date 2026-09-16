@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { topUp, useBux } from '../bloxity/bux'
 import { formatBonus, formatNumber } from '../game/format'
 import { powerMultiplier, useGame } from '../game/gameStore'
 import { petWinsMultiplier } from '../game/pets'
@@ -16,11 +17,24 @@ const OUTLINE = {
 const ICON_SHADOW = { filter: 'drop-shadow(0 3px 0 rgba(0,0,0,0.85))' }
 const INK = '#1b1b25'
 
-/** Toast notice styling per tone: card border, icon gradient, text colour. */
+/**
+ * Toast notice styling per tone: the stripe and timer bar colour, the icon's
+ * gradient, and the card's own background.
+ */
 const NOTICE = {
-  success: { border: '#7dff6a', icon: ['#eaffd8', '#5fe64c'], text: 'text-lime-200' },
-  error: { border: '#ff5a5a', icon: ['#ffdede', '#ff5a5a'], text: 'text-red-200' },
-  info: { border: '#7fd8ff', icon: ['#eaf9ff', '#5cc4ff'], text: 'text-sky-100' },
+  success: { accent: '#5fe64c', icon: ['#eaffd8', '#5fe64c'], bg: ['#1d3a26', '#101f17'] },
+  error: { accent: '#ff6b6b', icon: ['#ffdede', '#ff5a5a'], bg: ['#3d1c20', '#231216'] },
+  info: { accent: '#5cc4ff', icon: ['#eaf9ff', '#5cc4ff'], bg: ['#17304a', '#111b28'] },
+}
+
+/**
+ * Toast text. Deliberately not OUTLINE: a 1.5px stroke around 20px letters closes
+ * up their counters and turns a sentence to mush. The card behind it is dark and
+ * solid, so a soft drop shadow is all the contrast it needs.
+ */
+const NOTICE_TEXT = {
+  fontFamily: '"Arial Black", "Segoe UI Black", Impact, sans-serif',
+  textShadow: '0 2px 0 rgba(0,0,0,0.55)',
 }
 
 /** Button faces for the x2 / x4 / x8 boosts: gold, orange, red. */
@@ -100,6 +114,25 @@ function CursorIcon({ rainbow, className }) {
         strokeWidth="6"
         strokeLinejoin="round"
       />
+    </svg>
+  )
+}
+
+/** Bloxity's Bux gem, in the same chunky outlined style as the trophy. */
+function BuxIcon({ className }) {
+  return (
+    <svg viewBox="0 0 100 100" aria-hidden="true" className={`shrink-0 ${className}`} style={ICON_SHADOW}>
+      <defs>
+        <linearGradient id="hud-bux" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#bdf3ff" />
+          <stop offset="1" stopColor="#0f87ff" />
+        </linearGradient>
+      </defs>
+      <g stroke={INK} strokeWidth="8" strokeLinejoin="round">
+        <path d="M28 10 H72 L94 40 L50 92 L6 40 Z" fill="url(#hud-bux)" />
+        {/* One waistline only: the full facet web closes up at HUD size. */}
+        <path d="M6 40 H94" fill="none" strokeWidth="6" />
+      </g>
     </svg>
   )
 }
@@ -190,6 +223,40 @@ function PriceTag({ cost }) {
   )
 }
 
+/**
+ * The toast that says what just happened. One card, the tone carried by a stripe
+ * down its left edge, the icon in its own well, and a bar along the bottom that
+ * drains so you can see it's about to go. Keyed on the message id by the caller,
+ * so a new message replays the pop from the start.
+ *
+ * @param {{ message: { text: string, tone: 'success' | 'error' | 'info' } }} props
+ */
+function Notice({ message }) {
+  const tone = NOTICE[message.tone]
+  return (
+    <div key={message.id} className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-center px-4">
+      <div
+        className="notice-pop relative flex max-w-2xl items-center gap-3 overflow-hidden rounded-2xl border-4 py-3 pl-4 pr-5 shadow-2xl"
+        style={{ borderColor: INK, background: `linear-gradient(to bottom, ${tone.bg[0]}, ${tone.bg[1]})` }}
+      >
+        {/* The tone, read at a glance before a word of it is. */}
+        <span className="absolute inset-y-0 left-0 w-2" style={{ background: tone.accent }} />
+        <span
+          className="ml-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-2"
+          style={{ borderColor: '#00000066', background: '#00000055' }}
+        >
+          <NoticeIcon tone={message.tone} className="h-8 w-8" />
+        </span>
+        <span className="min-w-0 text-pretty text-lg leading-snug text-white sm:text-xl" style={NOTICE_TEXT}>
+          {message.text}
+        </span>
+        {/* Drains over the toast's life, so its leaving is never a surprise. */}
+        <span className="notice-timer absolute inset-x-0 bottom-0 h-1.5" style={{ background: tone.accent }} />
+      </div>
+    </div>
+  )
+}
+
 /** "⚔ +N" popups: each pops up where it started, then flies into the Power counter. */
 function ClickPopups() {
   const popups = useGame((s) => s.popups)
@@ -206,8 +273,47 @@ function ClickPopups() {
 }
 
 /**
+ * Bux balance with a top-up button, under the Wins counter.
+ *
+ * Hidden entirely until a balance has actually been read (see bloxity/bux.js):
+ * signed out there is no balance, and a "0" would read as "you're broke" rather
+ * than "log in first".
+ */
+function BuxChip() {
+  const balance = useBux((s) => s.balance)
+  const busy = useBux((s) => s.busy)
+  if (balance === null) return null
+  return (
+    <div
+      className="mt-1.5 flex items-center gap-2 rounded-xl border-4 py-1 pl-2 pr-1"
+      style={{
+        borderColor: INK,
+        background: 'linear-gradient(to bottom, #123a5e, #0a1d30)',
+        boxShadow: 'inset 0 -4px 0 rgba(0,0,0,0.3), 0 4px 0 rgba(0,0,0,0.45)',
+      }}
+    >
+      <BuxIcon className="h-8 w-8" />
+      <span key={balance} className="power-bump text-3xl text-sky-200">
+        {formatNumber(balance)}
+      </span>
+      <button
+        type="button"
+        onClick={() => topUp()}
+        disabled={busy}
+        title="Top up Bux"
+        className="pointer-events-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-2 pb-0.5 text-2xl leading-none text-white transition hover:brightness-125 active:translate-y-0.5 disabled:opacity-50"
+        style={{ borderColor: INK, background: 'linear-gradient(to bottom, #3fb6ff, #0f6fd8)' }}
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
+/**
  * Big trophy and Wins total, top left under the player card, with the pet's Wins
- * multiplier under it whenever one is out (see petWinsMultiplier).
+ * multiplier under it whenever one is out (see petWinsMultiplier), and the Bux
+ * balance below that.
  */
 function WinsCounter() {
   const wins = useGame((s) => s.wins)
@@ -226,6 +332,8 @@ function WinsCounter() {
           {pets.length} pets · x{formatBonus(bonus)} Wins
         </span>
       )}
+      <BuxChip />
+      <PetsButton />
     </div>
   )
 }
@@ -347,22 +455,10 @@ export function GameHUD() {
   return (
     <>
       <ClickPopups />
+      {/* Wins, the pet bonus, Bux and the Pets button, stacked down the left rail. */}
       <WinsCounter />
-      <PetsButton />
       <PetsPanel />
-      {message && (
-        <div key={message.id} className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-center px-4">
-          <div
-            className="notice-pop flex max-w-xl items-center gap-3 rounded-2xl border-2 bg-slate-900/85 px-5 py-3 shadow-xl backdrop-blur"
-            style={{ borderColor: NOTICE[message.tone].border }}
-          >
-            <NoticeIcon tone={message.tone} />
-            <span className={`text-xl font-black ${NOTICE[message.tone].text}`} style={OUTLINE}>
-              {message.text}
-            </span>
-          </div>
-        </div>
-      )}
+      {message && <Notice message={message} />}
 
       <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex flex-col items-center gap-1 px-4">
         {level >= MAX_LEVEL ? (

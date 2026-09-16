@@ -28,11 +28,17 @@ export const WALL_RESET_DELAY_S = 10
 
 /**
  * The two Win pads at the end of each stage's cabin, in front of the next stage's
- * first wall. side: -1 left, +1 right, seen walking in. Gold is always open; blue
- * pays double but needs three times that wall's health in Power.
+ * first wall. side: -1 left, +1 right, seen walking in.
+ *
+ * Gold, on the right, is the normal pad: always open, pays the base Wins.
+ *
+ * Blue, on the left, is the VIP pad. It pays double and asks for no Power at all,
+ * but it stays shut until the player buys the VIP Wins Pad with Bux (see
+ * game/passes.js) — one purchase opens the blue pad in front of every stage, for
+ * good. `pass` is what makes a pad Bux-gated; `power` is then ignored.
  */
 export const WIN_PADS = [
-  { id: 'blue', side: -1, color: '#2fd4ff', fill: ['#e8fdff', '#35d8ff'], wins: 2, power: 3 },
+  { id: 'blue', side: -1, color: '#2fd4ff', fill: ['#e8fdff', '#35d8ff'], wins: 2, power: 0, pass: 'vipWins' },
   { id: 'gold', side: 1, color: '#ffe14a', fill: ['#fff6a8', '#ffc21a'], wins: 1, power: 0 },
 ]
 
@@ -45,5 +51,21 @@ export const HOLD_S = 1.2
  */
 export const padWins = (number, pad) => Math.max(1, tidy(10 * 1.135 ** (number - 11))) * pad.wins
 
-/** Power needed before a pad pays out. */
+/** Power needed before a pad pays out. Zero for both of today's pads. */
 export const padPower = (number, pad) => wallHp(number) * pad.power
+
+/**
+ * Whether this pad will pay out right now.
+ *
+ * A Bux pad opens on the pass and nothing else; a normal one opens on Power. Takes
+ * the game state rather than reading the store itself, so the pads' render path and
+ * `claimPad` can both ask the same question of the same snapshot.
+ *
+ * @param {number} number the wall the pad stands before
+ * @param {object} pad an entry of WIN_PADS
+ * @param {{ power: number, ownedPasses: string[] }} state
+ */
+export function padUnlocked(number, pad, state) {
+  if (pad.pass) return state.ownedPasses.includes(pad.pass)
+  return state.power >= padPower(number, pad)
+}

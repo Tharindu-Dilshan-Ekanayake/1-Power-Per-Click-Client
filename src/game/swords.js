@@ -7,6 +7,12 @@
  * glow:  emissive strength of the blade
  * aura:  colour of its glow in the shop, when the blade's own colour is too dull or
  *        dark to glow nicely (defaults to the blade colour; see glowColor)
+ *
+ * bux:   set instead of `cost` on the two VIP blades - they are bought with Bux
+ *        rather than Wins, and stand on their own platform away from the rows (see
+ *        world/layout.js). `sku` is the IAP they buy; it has to exist and be active
+ *        in the Bloxity admin panel or the purchase comes back "not found".
+ *        Anything with `bux` set has no `cost` at all, so always check for it first.
  */
 export const SWORDS = [
   { id: 'wood', name: 'Wooden Sword', cost: 0, power: 1, blade: '#b07540', guard: '#7b4b27', edge: '#c98d57', size: 1, aura: '#ffab4a' },
@@ -28,7 +34,22 @@ export const SWORDS = [
   { id: 'void', name: 'Void Blade', cost: 9000000, power: 1000000, blade: '#6a1fff', guard: '#14101f', edge: '#d9a6ff', size: 1.85, glow: 1 },
   { id: 'galaxy', name: 'Galaxy Blade', cost: 20000000, power: 2400000, blade: '#4b3cff', guard: '#ff7af5', edge: '#ff7af5', size: 1.9, glow: 1 },
   { id: 'prism', name: 'Prism Blade', cost: 45000000, power: 5500000, blade: '#ff4fd8', guard: '#7ff9ff', edge: '#7ff9ff', size: 1.95, glow: 1 },
+  { id: 'inferno', name: 'Inferno Blade', cost: 100000000, power: 13000000, blade: '#ff4a1f', guard: '#2a0d06', edge: '#ffd166', size: 2, glow: 1, aura: '#ff7a2e' },
+  { id: 'nebula', name: 'Nebula Blade', cost: 250000000, power: 32000000, blade: '#7a4fff', guard: '#ff7af5', edge: '#d9c2ff', size: 2.05, glow: 1, aura: '#a07bff' },
+  { id: 'eclipse', name: 'Eclipse Blade', cost: 600000000, power: 80000000, blade: '#141428', guard: '#ffd23f', edge: '#ffe9a8', size: 2.1, glow: 1, aura: '#ffc93c' },
+  { id: 'titan', name: 'Titan Blade', cost: 1500000000, power: 200000000, blade: '#c8d4e0', guard: '#4a5a6a', edge: '#ffffff', size: 2.15, glow: 0.9, aura: '#9fd8ff' },
+  { id: 'divine', name: 'Divine Blade', cost: 4000000000, power: 520000000, blade: '#fff6d0', guard: '#ffd23f', edge: '#ffffff', size: 2.2, glow: 1, aura: '#fff0a0' },
+
+  // --- Bux blades. Priced to leapfrog a long grind, not to end the game: Phantom
+  // lands between Toxic and Storm, Celestial between Solar and Void.
+  { id: 'phantom', name: 'Phantom Edge', bux: 99, sku: 'sword_phantom_edge', power: 25000, blade: '#a45cff', guard: '#1d1030', edge: '#f0dcff', size: 1.62, glow: 0.95, aura: '#c47bff' },
+  { id: 'celestial', name: 'Celestial Edge', bux: 249, sku: 'sword_celestial_edge', power: 700000, blade: '#ffe08a', guard: '#7ff9ff', edge: '#ffffff', size: 1.92, glow: 1, aura: '#ffd76a' },
 ]
+
+/** The two blades on the VIP platform, in shop order. */
+export const BUX_SWORDS = SWORDS.filter((s) => s.bux)
+/** Everything bought with Wins - the long rows along the west wall. */
+export const WINS_SWORDS = SWORDS.filter((s) => !s.bux)
 
 export const DEFAULT_SWORD = SWORDS[0].id
 

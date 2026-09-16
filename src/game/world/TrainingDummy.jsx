@@ -1,14 +1,15 @@
-import { Billboard, Sparkles } from '@react-three/drei'
+import { Billboard } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { useRef } from 'react'
-import { AdditiveBlending, Vector3 } from 'three'
+import { AdditiveBlending, BoxGeometry, Vector3 } from 'three'
 
 import { formatNumber } from '../format'
 import { useGame } from '../gameStore'
 import { DUMMY_OFFSET_Z } from '../trainers'
 import { remoteStates, useLobby } from '../../net/lobbyClient'
-import { Label } from './Effects'
+import { Label, Sparkle } from './Effects'
+import { geometry, merge } from './geometry'
 import InteractPrompt from './InteractPrompt'
 import PadGlow from './PadGlow'
 import { labelTexture, radialGlowTexture, shade, studTexture, targetTexture } from './textures'
@@ -27,9 +28,31 @@ const STATUS_GLOW = {
   unlocked: 0.85,
   affordable: 0.85,
   locked: 0.45,
+  /** A Bux dummy nobody has unlocked yet: for sale, so it stays lit. */
+  bux: 1,
 }
+const GEM = ['#d6f6ff', '#2fa8ff']
 
 const _up = new Vector3(0, 1, 0)
+
+/**
+ * The dummy's torso, arms and head as one geometry, shared by every pad. They all
+ * take the same studded material, so there was never a reason to draw them apart.
+ */
+const dummyBody = () =>
+  geometry('dummy-body', () => {
+    const box = (w, h, d, x, y, z) => {
+      const g = new BoxGeometry(w, h, d)
+      g.translate(x, y, z)
+      return g
+    }
+    return merge([
+      box(1.3, 1.1, 0.7, 0, 1.9, 0),
+      box(0.5, 0.35, 0.35, -0.9, 2.1, 0),
+      box(0.5, 0.35, 0.35, 0.9, 2.1, 0),
+      box(1.2, 1.2, 0.5, 0, HEAD_Y, 0),
+    ])
+  })
 
 // Small canvas: a new texture is cached for every distinct gain shown.
 const popupTexture = (gain) =>
@@ -45,14 +68,18 @@ const popupTexture = (gain) =>
  *   The dummy stands on the pad's local -Z side; `rotationY` turns the whole pad.
  */
 export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }) {
+  // A Bux dummy has no `cost`, so no amount of Wins makes it "affordable" - it
+  // shows as `bux` until it is bought.
   const localStatus = useGame((s) =>
     s.activeTrainer === trainer.id
       ? 'active'
       : s.unlockedTrainers.includes(trainer.id)
         ? 'unlocked'
-        : s.wins >= trainer.cost
-          ? 'affordable'
-          : 'locked',
+        : trainer.bux
+          ? 'bux'
+          : s.wins >= trainer.cost
+            ? 'affordable'
+            : 'locked',
   )
   // Someone else training here shows the same "TRAINING!" glow, even though it's
   // not us - other players' training pads should look alive to us too.
@@ -111,7 +138,9 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
         ? 0.6 + 0.25 * Math.sin(clock.elapsedTime * 5)
         : status === 'locked'
           ? 0.08
-          : 0.3
+          : status === 'bux'
+            ? 0.4 + 0.2 * Math.sin(clock.elapsedTime * 3)
+            : 0.3
     }
 
     popups.current.forEach((mesh, i) => {
@@ -139,15 +168,14 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
       ? { text: 'TRAINING!', fill: '#7dff6a' }
       : status === 'unlocked'
         ? { text: trainer.cost === 0 ? 'FREE' : 'UNLOCKED', fill: '#7fd8ff' }
-        : {
-            text: `${formatNumber(trainer.cost)} Wins`,
-            icon: 'trophy',
-            fill: status === 'affordable' ? ['#fff6a8', '#ffc21a'] : ['#ffd0d0', '#ff7a7a'],
-          }
+        : status === 'bux'
+          ? { text: `${trainer.bux} Bux`, icon: 'bux', fill: GEM }
+          : {
+              text: `${formatNumber(trainer.cost)} Wins`,
+              icon: 'trophy',
+              fill: status === 'affordable' ? ['#fff6a8', '#ffc21a'] : ['#ffd0d0', '#ff7a7a'],
+            }
 
-  const body = (
-    <meshStandardMaterial map={studTexture([trainer.color], { cells: 1, studsPerCell: 2 })} roughness={0.7} />
-  )
 
   return (
     <group position={position} rotation={[0, rotationY, 0]}>
@@ -188,19 +216,9 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
           <boxGeometry args={[0.3, 1.2, 0.3]} />
           <meshStandardMaterial color="#7b4b27" roughness={0.8} />
         </mesh>
-        <mesh position={[0, 1.9, 0]} castShadow>
-          <boxGeometry args={[1.3, 1.1, 0.7]} />
-          {body}
-        </mesh>
-        {[-1, 1].map((side) => (
-          <mesh key={side} position={[side * 0.9, 2.1, 0]} castShadow>
-            <boxGeometry args={[0.5, 0.35, 0.35]} />
-            {body}
-          </mesh>
-        ))}
-        <mesh position={[0, HEAD_Y, 0]} castShadow>
-          <boxGeometry args={[1.2, 1.2, 0.5]} />
-          {body}
+        {/* Torso, both arms and the head: one shape, one material, one draw. */}
+        <mesh geometry={dummyBody()} castShadow>
+          <meshStandardMaterial map={studTexture([trainer.color], { cells: 1, studsPerCell: 2 })} roughness={0.7} />
         </mesh>
         <mesh position={[0, HEAD_Y, 0.26]}>
           <planeGeometry args={[1, 1]} />
@@ -222,7 +240,7 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
       </group>
 
       {active && (
-        <Sparkles
+        <Sparkle
           count={24}
           scale={[2.6, 3.2, 2.6]}
           position={[0, 1.8, DUMMY_OFFSET_Z]}
@@ -257,13 +275,17 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
         />
       </Billboard>
 
-      {offered && (status === 'affordable' || status === 'locked') && (
+      {offered && (status === 'affordable' || status === 'locked' || status === 'bux') && (
         <InteractPrompt
           position={[0, 2.4, DUMMY_OFFSET_Z / 2]}
           action="Unlock"
           title={`${trainer.multiplier}x Training`}
-          detail={`🏆 ${formatNumber(trainer.cost)} Wins${status === 'locked' ? ' · not enough Wins' : ''}`}
-          tone={status === 'affordable' ? 'normal' : 'warn'}
+          detail={
+            status === 'bux'
+              ? `💎 ${trainer.bux} Bux  -  yours for good`
+              : `🏆 ${formatNumber(trainer.cost)} Wins${status === 'locked' ? ' · not enough Wins' : ''}`
+          }
+          tone={status === 'locked' ? 'warn' : 'normal'}
         />
       )}
 

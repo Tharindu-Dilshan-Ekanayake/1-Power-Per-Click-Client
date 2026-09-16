@@ -3,6 +3,12 @@
  *
  * cost:       Wins to unlock it for good (the first is free)
  * multiplier: Power-per-click multiplier while standing on its pad
+ *
+ * bux:        set instead of `cost` on the two VIP dummies - they are unlocked with
+ *             Bux and stand on their own platform away from the rows (see
+ *             world/layout.js). `sku` is the IAP they buy, which must exist and be
+ *             active in the Bloxity admin panel. A trainer with `bux` has no
+ *             `cost`, so always check for it first.
  */
 export const TRAINERS = [
   { id: 'dummy-1', multiplier: 1.5, cost: 0, color: '#ff4a4a' },
@@ -13,7 +19,20 @@ export const TRAINERS = [
   { id: 'dummy-6', multiplier: 25, cost: 1500, color: '#ff8f2e' },
   { id: 'dummy-7', multiplier: 50, cost: 4000, color: '#2fe0d0' },
   { id: 'dummy-8', multiplier: 100, cost: 10000, color: '#ff5fb8' },
+  { id: 'dummy-9', multiplier: 200, cost: 25000, color: '#c8ff3a' },
+  { id: 'dummy-10', multiplier: 450, cost: 60000, color: '#ff3b6b' },
+
+  // --- Bux dummies. Shortcuts rather than an end point: 250x slots between the
+  // Wins ladder's 200x and 450x, 1000x above both. Same shape as the Bux blades -
+  // you pay to skip a stretch of the grind, not to leave it behind for good.
+  { id: 'vip-1', name: '250x VIP Training', multiplier: 250, bux: 99, sku: 'trainer_vip_250x', color: '#a45cff' },
+  { id: 'vip-2', name: '1000x VIP Training', multiplier: 1000, bux: 199, sku: 'trainer_vip_1000x', color: '#ffd23f' },
 ]
+
+/** The two dummies on the VIP platform. */
+export const BUX_TRAINERS = TRAINERS.filter((t) => t.bux)
+/** The eight unlocked with Wins - the two rows in the training zone. */
+export const WINS_TRAINERS = TRAINERS.filter((t) => !t.bux)
 
 /**
  * Where a dummy stands relative to its pad's centre, in the pad's own (rotated)

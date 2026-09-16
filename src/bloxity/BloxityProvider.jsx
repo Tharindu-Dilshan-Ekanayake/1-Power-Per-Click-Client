@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { BloxityContext } from './BloxityContext'
+import { clearBalance, refreshBalance } from './bux'
+import { applyPortalSettings, listenToPortalSettings } from './portalSettings'
 import { getSDK, safeCall, toUnsubscribe, waitForSDK } from './sdk'
 import { DEFAULT_PROPORTIONS, useBloxityStore } from './store'
 
@@ -105,12 +107,23 @@ export function BloxityProvider({ gameSlug, children }) {
         const readEquipped = () =>
           safeCall(sdk.avatar.getEquipped?.bind(sdk.avatar)) || null
 
+        // Settings the portal's pause menu can drive. Registered first and
+        // before loadingEnd(), both because the first push can arrive at any
+        // moment and because listening is what un-greys each control in that
+        // menu (see portalSettings.js).
+        unsubscribers.push(listenToPortalSettings(sdk))
+
         // Auth. Fires immediately with the current user (or null), then on every
         // login/logout.
         unsubscribers.push(
           toUnsubscribe(
             sdk.auth.onUserChanged((nextUser) => {
               useBloxityStore.getState().setUser(nextUser || null)
+
+              // Bux belongs to the account, so it arrives and leaves with the user.
+              // Fire and forget: the HUD chip shows "—" until the read lands.
+              if (nextUser) refreshBalance()
+              else clearBalance()
               // The guest identity is what the HUD falls back to when signed out.
               useBloxityStore
                 .getState()
@@ -203,6 +216,11 @@ export function BloxityProvider({ gameSlug, children }) {
         safeCall((sdkRef.current || getSDK())?.game?.loadingStep, label),
       loadingEnd: () => safeCall((sdkRef.current || getSDK())?.game?.loadingEnd),
       updateRoom: (room) => safeCall((sdkRef.current || getSDK())?.game?.updateRoom, room),
+      /**
+       * Re-applies every portal setting. The audio graph, renderer and camera are
+       * all built after the portal's first push, so call this once they exist.
+       */
+      applySettings: () => applyPortalSettings(sdkRef.current || getSDK()),
     }),
     [],
   )

@@ -1,18 +1,31 @@
-import { Sparkles } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { useRef } from 'react'
 import { AdditiveBlending, DoubleSide } from 'three'
 
 import { useGame } from '../gameStore'
+import { Sparkle } from './Effects'
 import { radialGlowTexture, swirlTexture } from './textures'
 
-const CENTER_Y = 4.2
+/** Height of the portal's middle; the shared light sits here too. */
+export const CENTER_Y = 4.2
 const RADIUS = 3.3
+
+/** How far in front of the arch the light hangs, in the portal's own -Z/+Z sense. */
+export const LIGHT_Z = 2
 
 /**
  * Swirling purple portal. Walking into it teleports the player to `target`.
  * The stone arch around it is part of the static map (see layout.js).
+ *
+ * The purple light it casts is not here: see PortalLight in World.jsx, which is one
+ * light shared by all three portals and always in the scene. It used to be a
+ * `pointLight` on this component, which meant the scene's point-light count went
+ * from one to zero and back every time you walked out of range of a portal and
+ * returned - and a change in the light count makes three.js rebuild the shader for
+ * every material in view. The lobby portal stands nine metres from the spawn point,
+ * so that was a recompile of the whole scene on the way out and another on the way
+ * back, which is most of what made walking anywhere stutter.
  *
  * @param {{ position: number[], rotationY?: number, target: number[], requiresWall?: number }} props
  *   With `requiresWall`, it only works once that stage wall has been broken.
@@ -75,7 +88,7 @@ export function Portal({ position, rotationY = 0, target, requiresWall = 0 }) {
           toneMapped={false}
         />
       </mesh>
-      <Sparkles
+      <Sparkle
         count={50}
         scale={[6, 7, 2]}
         position={[0, CENTER_Y, 0.8]}
@@ -83,8 +96,6 @@ export function Portal({ position, rotationY = 0, target, requiresWall = 0 }) {
         speed={0.5}
         color="#e3b8ff"
       />
-      <pointLight color="#b35cff" intensity={25} distance={16} position={[0, CENTER_Y, 2]} />
-
       <RigidBody type="fixed" colliders={false}>
         <CuboidCollider
           sensor
