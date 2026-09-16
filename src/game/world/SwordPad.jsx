@@ -19,6 +19,8 @@ const STATUS_COLOR = {
   owned: '#ffd23f',
   affordable: '#ff3b3b',
   locked: '#d9302b',
+  /** A Bux blade nobody has bought yet: gem blue, never the "can't afford" red. */
+  bux: '#2fa8ff',
 }
 
 /** How brightly the pad's glow shines: dim while out of reach, brightest in hand. */
@@ -27,9 +29,11 @@ const STATUS_GLOW = {
   owned: 0.85,
   affordable: 1,
   locked: 0.5,
+  bux: 1.15,
 }
 
 const GOLD = ['#fff6a8', '#ffc21a']
+const GEM = ['#d6f6ff', '#2fa8ff']
 const PAD_TOP = 0.26
 /** Shop swords are shown bigger than held ones so the row reads from the path. */
 const DISPLAY_SCALE = 1.35
@@ -42,14 +46,18 @@ const DISPLAY_SCALE = 1.35
  * @param {{ sword: object, position: number[] }} props
  */
 export function SwordPad({ sword, position }) {
+  // A Bux blade has no `cost` at all, so it can never be "affordable" or "locked" -
+  // there is no amount of Wins that buys it. It shows as `bux` until it is owned.
   const status = useGame((s) =>
     s.equipped === sword.id
       ? 'equipped'
       : s.owned.includes(sword.id)
         ? 'owned'
-        : s.wins >= sword.cost
-          ? 'affordable'
-          : 'locked',
+        : sword.bux
+          ? 'bux'
+          : s.wins >= sword.cost
+            ? 'affordable'
+            : 'locked',
   )
   const swordRef = useRef(null)
   const padMaterial = useRef(null)
@@ -83,12 +91,17 @@ export function SwordPad({ sword, position }) {
     if (other.rigidBodyObject?.name === 'player') useGame.getState().clearInteract('sword', sword.id)
   }
 
-  const price = sword.cost === 0 ? 'Free' : `🏆 ${formatNumber(sword.cost)} Wins`
+  const price = sword.bux
+    ? `💎 ${sword.bux} Bux`
+    : sword.cost === 0
+      ? 'Free'
+      : `🏆 ${formatNumber(sword.cost)} Wins`
   const prompt = {
     equipped: { action: 'Equipped', tone: 'done', detail: 'In your hand' },
     owned: { action: 'Equip', tone: 'normal', detail: 'You own this sword' },
     affordable: { action: 'Buy', tone: 'normal', detail: price },
     locked: { action: 'Buy', tone: 'warn', detail: `${price} · not enough Wins` },
+    bux: { action: 'Buy', tone: 'normal', detail: `${price}  -  yours for good` },
   }[status]
 
   const color = STATUS_COLOR[status]
@@ -97,9 +110,11 @@ export function SwordPad({ sword, position }) {
       ? { text: 'EQUIPPED', fill: ['#f0dcff', '#c07bff'] }
       : status === 'owned'
         ? { text: 'OWNED', fill: GOLD }
-        : sword.cost === 0
-          ? { text: 'FREE', fill: ['#ffffff', '#b8ffb0'] }
-          : { text: `${formatNumber(sword.cost)} Wins`, icon: 'trophy', fill: GOLD }
+        : sword.bux
+          ? { text: `${sword.bux} Bux`, icon: 'bux', fill: GEM }
+          : sword.cost === 0
+            ? { text: 'FREE', fill: ['#ffffff', '#b8ffb0'] }
+            : { text: `${formatNumber(sword.cost)} Wins`, icon: 'trophy', fill: GOLD }
 
   return (
     <group position={position}>
@@ -154,12 +169,13 @@ export function SwordPad({ sword, position }) {
       <Billboard position={[0, PAD_TOP + height + 1.15, 0]}>
         <Label
           lines={[
+            ...(sword.bux ? [{ text: 'VIP', scale: 0.8, fill: GEM }] : []),
             priceLine,
             { text: sword.name, scale: 1.3 },
             { text: `+${formatNumber(sword.power)} Power`, fill: ['#ff9a9a', '#ff3030'] },
           ]}
           position={[0, 0, 0]}
-          size={[3.8, 1.9]}
+          size={[3.8, sword.bux ? 2.3 : 1.9]}
           style={{ width: 512 }}
         />
       </Billboard>

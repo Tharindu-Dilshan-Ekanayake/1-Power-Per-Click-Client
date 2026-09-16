@@ -90,6 +90,16 @@ export const PETS = [
     colors: { body: '#ff4fd8', belly: '#7ff9ff', accent: '#ffe94a', eye: '#2a2a2a' },
     glow: 0.9,
   },
+  {
+    id: 'seraph',
+    name: 'Seraphine',
+    species: 'dragon',
+    // The Bux pet, so the best bonus in the game - but bonuses add up, so this is
+    // a big lift on top of a full squad rather than a replacement for one.
+    winsBonus: 20,
+    colors: { body: '#fff4cf', belly: '#ffffff', accent: '#ffc94a', eye: '#6a4a10' },
+    glow: 0.9,
+  },
 ]
 
 /** @returns the pet, or undefined for an unknown id. */

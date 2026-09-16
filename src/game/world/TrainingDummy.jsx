@@ -27,7 +27,10 @@ const STATUS_GLOW = {
   unlocked: 0.85,
   affordable: 0.85,
   locked: 0.45,
+  /** A Bux dummy nobody has unlocked yet: for sale, so it stays lit. */
+  bux: 1,
 }
+const GEM = ['#d6f6ff', '#2fa8ff']
 
 const _up = new Vector3(0, 1, 0)
 
@@ -45,14 +48,18 @@ const popupTexture = (gain) =>
  *   The dummy stands on the pad's local -Z side; `rotationY` turns the whole pad.
  */
 export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }) {
+  // A Bux dummy has no `cost`, so no amount of Wins makes it "affordable" - it
+  // shows as `bux` until it is bought.
   const localStatus = useGame((s) =>
     s.activeTrainer === trainer.id
       ? 'active'
       : s.unlockedTrainers.includes(trainer.id)
         ? 'unlocked'
-        : s.wins >= trainer.cost
-          ? 'affordable'
-          : 'locked',
+        : trainer.bux
+          ? 'bux'
+          : s.wins >= trainer.cost
+            ? 'affordable'
+            : 'locked',
   )
   // Someone else training here shows the same "TRAINING!" glow, even though it's
   // not us - other players' training pads should look alive to us too.
@@ -111,7 +118,9 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
         ? 0.6 + 0.25 * Math.sin(clock.elapsedTime * 5)
         : status === 'locked'
           ? 0.08
-          : 0.3
+          : status === 'bux'
+            ? 0.4 + 0.2 * Math.sin(clock.elapsedTime * 3)
+            : 0.3
     }
 
     popups.current.forEach((mesh, i) => {
@@ -139,11 +148,13 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
       ? { text: 'TRAINING!', fill: '#7dff6a' }
       : status === 'unlocked'
         ? { text: trainer.cost === 0 ? 'FREE' : 'UNLOCKED', fill: '#7fd8ff' }
-        : {
-            text: `${formatNumber(trainer.cost)} Wins`,
-            icon: 'trophy',
-            fill: status === 'affordable' ? ['#fff6a8', '#ffc21a'] : ['#ffd0d0', '#ff7a7a'],
-          }
+        : status === 'bux'
+          ? { text: `${trainer.bux} Bux`, icon: 'bux', fill: GEM }
+          : {
+              text: `${formatNumber(trainer.cost)} Wins`,
+              icon: 'trophy',
+              fill: status === 'affordable' ? ['#fff6a8', '#ffc21a'] : ['#ffd0d0', '#ff7a7a'],
+            }
 
   const body = (
     <meshStandardMaterial map={studTexture([trainer.color], { cells: 1, studsPerCell: 2 })} roughness={0.7} />
@@ -257,13 +268,17 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
         />
       </Billboard>
 
-      {offered && (status === 'affordable' || status === 'locked') && (
+      {offered && (status === 'affordable' || status === 'locked' || status === 'bux') && (
         <InteractPrompt
           position={[0, 2.4, DUMMY_OFFSET_Z / 2]}
           action="Unlock"
           title={`${trainer.multiplier}x Training`}
-          detail={`🏆 ${formatNumber(trainer.cost)} Wins${status === 'locked' ? ' · not enough Wins' : ''}`}
-          tone={status === 'affordable' ? 'normal' : 'warn'}
+          detail={
+            status === 'bux'
+              ? `💎 ${trainer.bux} Bux  -  yours for good`
+              : `🏆 ${formatNumber(trainer.cost)} Wins${status === 'locked' ? ' · not enough Wins' : ''}`
+          }
+          tone={status === 'locked' ? 'warn' : 'normal'}
         />
       )}
 

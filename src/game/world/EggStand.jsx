@@ -37,6 +37,7 @@ const WIDEST = 3
 const STAND_TOP = 0.42
 const LIFT = 0.25
 const GOLD = ['#fff6a8', '#ffc21a']
+const GEM = ['#d6f6ff', '#2fa8ff']
 
 function EggModel({ egg }) {
   const glow = egg.glow ?? 0
@@ -160,14 +161,21 @@ export function EggStand({ egg, position }) {
                   { text: `x${formatBonus(pet.winsBonus)} Wins`, icon: 'trophy', fill: GOLD },
                   { text: equipped ? 'Following you' : 'Tap E to summon', scale: 0.85 },
                 ]
-              : [
-                  { text: egg.name, scale: 1.2 },
-                  { text: `${formatNumber(egg.cost)} Wins`, icon: 'trophy', fill: GOLD },
-                  { text: `Pet: x${formatBonus(pet.winsBonus)} Wins`, scale: 0.85, fill: '#9ff5c0' },
-                ]
+              : egg.bux
+                ? [
+                    { text: 'VIP', scale: 0.75, fill: GEM },
+                    { text: egg.name, scale: 1.2 },
+                    { text: `${egg.bux} Bux`, icon: 'bux', fill: GEM },
+                    { text: `Pet: x${formatBonus(pet.winsBonus)} Wins`, scale: 0.85, fill: '#9ff5c0' },
+                  ]
+                : [
+                    { text: egg.name, scale: 1.2 },
+                    { text: `${formatNumber(egg.cost)} Wins`, icon: 'trophy', fill: GOLD },
+                    { text: `Pet: x${formatBonus(pet.winsBonus)} Wins`, scale: 0.85, fill: '#9ff5c0' },
+                  ]
           }
           position={[0, 0, 0]}
-          size={[3.6, 2]}
+          size={[3.6, egg.bux && !owned ? 2.4 : 2]}
           style={{ width: 512 }}
         />
       </Billboard>
@@ -198,7 +206,11 @@ export function EggStand({ egg, position }) {
             position={[0, 1.8, 0]}
             action="Hatch"
             title={egg.name}
-            detail={`🏆 ${formatNumber(egg.cost)} Wins  ·  pet x${formatBonus(pet.winsBonus)}`}
+            detail={
+              egg.bux
+                ? `💎 ${egg.bux} Bux  ·  pet x${formatBonus(pet.winsBonus)} Wins`
+                : `🏆 ${formatNumber(egg.cost)} Wins  ·  pet x${formatBonus(pet.winsBonus)}`
+            }
           />
         ))}
     </group>

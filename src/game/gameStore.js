@@ -154,6 +154,14 @@ export const useGame = create(
         const { unlockedTrainers, wins, interact, notify } = get()
         const trainer = getTrainer(id)
         if (!trainer || unlockedTrainers.includes(id)) return
+        // The two VIP dummies are bought with Bux, and start training straight away.
+        if (trainer.bux) {
+          return get().buyWithBux(trainer, () => ({
+            unlockedTrainers: [...get().unlockedTrainers, id],
+            activeTrainer: id,
+            interact: null,
+          }))
+        }
         if (wins < trainer.cost) {
           notify(`Need ${formatNumber(trainer.cost - wins)} more Wins to unlock ${trainer.multiplier}x training`, 'error')
           return
@@ -212,6 +220,14 @@ export const useGame = create(
         if (ownedPets.includes(id)) {
           get().togglePet(id)
           return
+        }
+
+        // The Seraph egg is bought with Bux; its pet comes out following you.
+        if (egg.bux) {
+          return get().buyWithBux(egg, () => ({
+            ownedPets: [...get().ownedPets, id],
+            equippedPets: [...get().equippedPets, id].slice(0, MAX_EQUIPPED),
+          }))
         }
 
         if (wins < egg.cost) {
@@ -294,7 +310,12 @@ export const useGame = create(
       /** Show this pet on the Pets panel's detail card; null closes it. */
       selectPet: (id) => set({ petsSelected: id }),
 
-      /** E at a sword pad: equip it if owned, otherwise try to buy it. */
+      /**
+       * E at a sword pad: equip it if owned, otherwise try to buy it.
+       *
+       * Returns a promise only for the Bux blades, whose purchase is a round trip
+       * through the portal; the Wins path is synchronous and returns nothing.
+       */
       pickSword: (id) => {
         const { owned, equipped, wins, notify } = get()
         const sword = getSword(id)
@@ -307,6 +328,12 @@ export const useGame = create(
           notify(`Equipped ${sword.name}`)
           playSound('equip')
           return
+        }
+        // The two VIP blades are bought with Bux, not Wins, and come equipped. The
+        // promise is handed back rather than dropped: the E key does not care, but a
+        // caller that wants to know when the modal closed can wait for it.
+        if (sword.bux) {
+          return get().buyWithBux(sword, () => ({ owned: [...get().owned, id], equipped: id }))
         }
         if (wins < sword.cost) {
           notify(`Need ${formatNumber(sword.cost - wins)} more Wins for ${sword.name}`, 'error')
@@ -420,11 +447,32 @@ export const useGame = create(
        *
        * @returns {Promise<boolean>} whether the pass is now owned
        */
-      buyPass: async (id) => {
-        const { ownedPasses, purchasing, notify } = get()
+      buyPass: (id) => {
         const pass = getPass(id)
-        if (!pass) return false
-        if (ownedPasses.includes(id)) return true
+        if (!pass) return Promise.resolve(false)
+        if (get().ownedPasses.includes(id)) return Promise.resolve(true)
+        return get().buyWithBux(pass, () => ({ ownedPasses: [...get().ownedPasses, id] }))
+      },
+
+      /**
+       * The shared front half of every Bux purchase: the VIP Win pad, the two Bux
+       * blades, the Seraph egg and the two VIP dummies all come through here.
+       *
+       * The SDK owns the whole payment - it prices the SKU server-side, draws the
+       * confirm modal and takes the Bux - so all this does is check somebody is
+       * signed in, wait for the answer, and hand the result to `grant`.
+       *
+       * Async, unlike every other buy in this store, because a real payment is a
+       * round trip through the portal. `purchasing` keeps a held E (or a second
+       * click) from opening a modal behind the one already up.
+       *
+       * @param {{ sku: string, name: string, bux?: number }} item
+       * @param {() => object} grant returns the state patch that hands the item over
+       * @returns {Promise<boolean>} whether the player now owns it
+       */
+      buyWithBux: async (item, grant) => {
+        const { purchasing, notify } = get()
+        if (!item?.sku) return false
         if (purchasing) return false
 
         if (!isSignedIn()) {
@@ -435,7 +483,7 @@ export const useGame = create(
 
         set({ purchasing: true })
         try {
-          const result = await purchase(pass.sku, { passId: id })
+          const result = await purchase(item.sku, { itemId: item.id })
           if (!result.success) {
             // "User cancelled" is the player closing the modal, not a fault.
             if (result.error && result.error !== 'User cancelled') {
@@ -443,9 +491,10 @@ export const useGame = create(
             }
             return false
           }
-          // Re-read: the await above spans a modal, so the rest of the store moved.
-          set({ ownedPasses: [...get().ownedPasses, id] })
-          notify(`${pass.name} unlocked!`, 'success')
+          // grant() re-reads the store on purpose: the await above spans a modal,
+          // so anything captured before it is stale by now.
+          set(grant())
+          notify(`${item.name} unlocked!`, 'success')
           playSound('unlock')
           return true
         } finally {
