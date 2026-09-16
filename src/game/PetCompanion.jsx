@@ -4,6 +4,7 @@ import { Quaternion, Vector3 } from 'three'
 
 import { useGame } from './gameStore'
 import { getPet } from './pets'
+import { playerPosition } from './playerAnchor'
 import { PLAYER_HEIGHT } from './Player'
 import { Sparkle } from './world/Effects'
 import { PetModel } from './world/PetModel'
@@ -51,7 +52,7 @@ function slot(i) {
  *
  * @param {{ bodyRef: React.MutableRefObject<any>, pet: object, index: number }} props
  */
-function Follower({ bodyRef, pet, index }) {
+function Follower({ bodyRef, anchorRef, pet, index }) {
   const groupRef = useRef(null)
   const initialised = useRef(false)
   const facing = useRef(0)
@@ -63,9 +64,11 @@ function Follower({ bodyRef, pet, index }) {
     const group = groupRef.current
     if (!body || !group) return
 
-    const p = body.translation()
+    // The eased position, so the pet trots beside the avatar rather than the
+    // physics body's stepped one (see playerAnchor.js).
+    if (!playerPosition(anchorRef, bodyRef, _playerPos)) return
+    _playerPos.y -= PLAYER_HEIGHT / 2
     const v = body.linvel()
-    _playerPos.set(p.x, p.y - PLAYER_HEIGHT / 2, p.z)
 
     if (Math.hypot(v.x, v.z) > TURN_SPEED) facing.current = Math.atan2(v.x, v.z)
 
@@ -109,16 +112,17 @@ function Follower({ bodyRef, pet, index }) {
  * The whole squad of equipped pets (see the Pets panel), each walking its own
  * slot in the formation behind the player.
  *
- * @param {{ bodyRef: React.MutableRefObject<any> }} props
+ * @param {{ bodyRef: React.MutableRefObject<any>,
+ *           anchorRef?: React.MutableRefObject<any> }} props
  */
-export function PetCompanion({ bodyRef }) {
+export function PetCompanion({ bodyRef, anchorRef }) {
   const equipped = useGame((s) => s.equippedPets)
 
   return (
     <>
       {equipped.map((id, i) => {
         const pet = getPet(id)
-        return pet ? <Follower key={id} bodyRef={bodyRef} pet={pet} index={i} /> : null
+        return pet ? <Follower key={id} bodyRef={bodyRef} anchorRef={anchorRef} pet={pet} index={i} /> : null
       })}
     </>
   )

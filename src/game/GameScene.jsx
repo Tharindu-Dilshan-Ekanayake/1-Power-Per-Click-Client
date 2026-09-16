@@ -95,9 +95,12 @@ function LocalEnvironment() {
 export function GameScene() {
   const { game } = useBloxity()
   const playerBodyRef = useRef(null)
+  // The eased stand-in for the body, which is what anything on screen follows.
+  // See game/playerAnchor.js for why the two are not the same thing.
+  const playerAnchorRef = useRef(null)
   // Graphics level, pushed in from the portal's pause menu (see game/settings.js).
   const quality = useSettings((s) => s.quality)
-  const { dpr, shadows } = qualityOf(quality)
+  const { dpr, shadows, physicsHz, solverIterations } = qualityOf(quality)
 
   const [avatarReady, setAvatarReady] = useState(false)
   const loadingEnded = useRef(false)
@@ -140,25 +143,30 @@ export function GameScene() {
       <ShadowToggle enabled={shadows} />
       <fog attach="fog" args={['#cfeaff', 140, 420]} />
       <hemisphereLight args={['#d6ecff', '#6b8f5a', 0.7]} />
-      <SunLight bodyRef={playerBodyRef} />
+      <SunLight bodyRef={playerBodyRef} anchorRef={playerAnchorRef} />
 
       <LocalEnvironment />
       <Suspense fallback={null}>
-        <Physics gravity={[0, -18, 0]}>
+        <Physics
+          gravity={[0, -18, 0]}
+          timeStep={1 / physicsHz}
+          numSolverIterations={solverIterations}
+        >
           <World bodyRef={playerBodyRef} />
           <WorldReady />
           <Player
             bodyRef={playerBodyRef}
+            anchorRef={playerAnchorRef}
             position={SPAWN}
             onAvatarReady={handleAvatarReady}
           />
-          <PetCompanion bodyRef={playerBodyRef} />
+          <PetCompanion bodyRef={playerBodyRef} anchorRef={playerAnchorRef} />
           {/* The other players in our lobby, and sending ours (after each physics step). */}
           <RemotePlayers />
           <NetSync bodyRef={playerBodyRef} />
           {/* Inside Physics: the camera raycasts against the world so it can't be
               pushed through a stage wall. It no-ops until the player body exists. */}
-          <FollowCamera bodyRef={playerBodyRef} />
+          <FollowCamera bodyRef={playerBodyRef} anchorRef={playerAnchorRef} />
         </Physics>
       </Suspense>
 

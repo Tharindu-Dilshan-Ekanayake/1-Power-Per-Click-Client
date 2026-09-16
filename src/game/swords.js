@@ -34,6 +34,11 @@ export const SWORDS = [
   { id: 'void', name: 'Void Blade', cost: 9000000, power: 1000000, blade: '#6a1fff', guard: '#14101f', edge: '#d9a6ff', size: 1.85, glow: 1 },
   { id: 'galaxy', name: 'Galaxy Blade', cost: 20000000, power: 2400000, blade: '#4b3cff', guard: '#ff7af5', edge: '#ff7af5', size: 1.9, glow: 1 },
   { id: 'prism', name: 'Prism Blade', cost: 45000000, power: 5500000, blade: '#ff4fd8', guard: '#7ff9ff', edge: '#7ff9ff', size: 1.95, glow: 1 },
+  { id: 'inferno', name: 'Inferno Blade', cost: 100000000, power: 13000000, blade: '#ff4a1f', guard: '#2a0d06', edge: '#ffd166', size: 2, glow: 1, aura: '#ff7a2e' },
+  { id: 'nebula', name: 'Nebula Blade', cost: 250000000, power: 32000000, blade: '#7a4fff', guard: '#ff7af5', edge: '#d9c2ff', size: 2.05, glow: 1, aura: '#a07bff' },
+  { id: 'eclipse', name: 'Eclipse Blade', cost: 600000000, power: 80000000, blade: '#141428', guard: '#ffd23f', edge: '#ffe9a8', size: 2.1, glow: 1, aura: '#ffc93c' },
+  { id: 'titan', name: 'Titan Blade', cost: 1500000000, power: 200000000, blade: '#c8d4e0', guard: '#4a5a6a', edge: '#ffffff', size: 2.15, glow: 0.9, aura: '#9fd8ff' },
+  { id: 'divine', name: 'Divine Blade', cost: 4000000000, power: 520000000, blade: '#fff6d0', guard: '#ffd23f', edge: '#ffffff', size: 2.2, glow: 1, aura: '#fff0a0' },
 
   // --- Bux blades. Priced to leapfrog a long grind, not to end the game: Phantom
   // lands between Toxic and Storm, Celestial between Solar and Void.

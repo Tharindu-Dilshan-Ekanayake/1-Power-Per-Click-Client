@@ -3,6 +3,7 @@ import { useRapier } from '@react-three/rapier'
 import { useEffect, useRef } from 'react'
 import { Vector3 } from 'three'
 
+import { playerPosition } from './playerAnchor'
 import { useSettings } from './settings'
 
 /** How high above the player's origin the camera aims. */
@@ -89,9 +90,12 @@ const _offset = new Vector3()
  * authoritative transform and updates every physics step, not every render. Must
  * live inside <Physics>, because the wall collision casts a ray into that world.
  *
- * @param {{ bodyRef: React.MutableRefObject<any> }} props
+ * @param {{ bodyRef: React.MutableRefObject<any>,
+ *           anchorRef?: React.MutableRefObject<any> }} props
+ *   Aims at `anchorRef` (the eased position - see playerAnchor.js) and still casts
+ *   its wall ray against `bodyRef`, which is the thing physics actually knows.
  */
-export function FollowCamera({ bodyRef }) {
+export function FollowCamera({ bodyRef, anchorRef }) {
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
   const { world, rapier } = useRapier()
@@ -230,8 +234,10 @@ export function FollowCamera({ bodyRef }) {
     const body = bodyRef.current
     if (!body) return
 
-    const pos = body.translation()
-    _target.set(pos.x, pos.y + LOOK_HEIGHT, pos.z)
+    // The eased position, not the raw one: see playerAnchor.js. Reading the body
+    // here is what used to make the whole world judder against the avatar.
+    if (!playerPosition(anchorRef, bodyRef, _target)) return
+    _target.y += LOOK_HEIGHT
 
     const teleported = _lastTarget.distanceTo(_target) > TELEPORT_DISTANCE
     _lastTarget.copy(_target)

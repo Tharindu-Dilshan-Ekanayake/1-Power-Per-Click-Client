@@ -2,12 +2,13 @@ import { Billboard } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { useRef } from 'react'
-import { AdditiveBlending } from 'three'
+import { AdditiveBlending, BoxGeometry } from 'three'
 
 import { formatBonus, formatNumber } from '../format'
 import { useGame } from '../gameStore'
 import { getPet } from '../pets'
 import { Label, Sparkle } from './Effects'
+import { geometry, merge } from './geometry'
 import InteractPrompt from './InteractPrompt'
 import { radialGlowTexture, shade } from './textures'
 import { PetModel } from './PetModel'
@@ -39,23 +40,37 @@ const LIFT = 0.25
 const GOLD = ['#fff6a8', '#ffc21a']
 const GEM = ['#d6f6ff', '#2fa8ff']
 
+/**
+ * The egg's layers and spots, split by which of the two colours they take and merged
+ * into one geometry each. The silhouette is the same for every egg in the game, so
+ * this is built once: twelve meshes a stand became two.
+ */
+const eggParts = () =>
+  geometry('egg', () => {
+    const box = (w, h, d, x, y, z) => {
+      const g = new BoxGeometry(w, h, d)
+      g.translate(x, y, z)
+      return g
+    }
+    const byColor = [[], []]
+    LAYERS.forEach(([w, h, ci], i) => byColor[ci].push(box(w, h, w, 0, LAYER_Y[i], 0)))
+    for (const [x, z] of SPOTS) byColor[1].push(box(0.4, 0.4, 0.4, x, LAYER_Y[WIDEST], z))
+    return byColor.map(merge)
+  })
+
 function EggModel({ egg }) {
   const glow = egg.glow ?? 0
-  const materials = egg.colors.map((color) => (
-    <meshStandardMaterial key={color} color={color} emissive={color} emissiveIntensity={glow} roughness={0.5} />
-  ))
+  const parts = eggParts()
   return (
     <group>
-      {LAYERS.map(([w, h, ci], i) => (
-        <mesh key={i} position={[0, LAYER_Y[i], 0]} castShadow>
-          <boxGeometry args={[w, h, w]} />
-          {materials[ci]}
-        </mesh>
-      ))}
-      {SPOTS.map(([x, z], i) => (
-        <mesh key={`spot-${i}`} position={[x, LAYER_Y[WIDEST], z]}>
-          <boxGeometry args={[0.4, 0.4, 0.4]} />
-          {materials[1]}
+      {parts.map((part, i) => (
+        <mesh key={i} geometry={part} castShadow>
+          <meshStandardMaterial
+            color={egg.colors[i]}
+            emissive={egg.colors[i]}
+            emissiveIntensity={glow}
+            roughness={0.5}
+          />
         </mesh>
       ))}
     </group>

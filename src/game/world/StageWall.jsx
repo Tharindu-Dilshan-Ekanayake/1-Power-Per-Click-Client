@@ -1,12 +1,13 @@
 import { useFrame } from '@react-three/fiber'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { AdditiveBlending, Color, DoubleSide, Euler, Matrix4, Quaternion, Vector3 } from 'three'
+import { AdditiveBlending, BoxGeometry, Color, DoubleSide, Euler, Matrix4, Quaternion, Vector3 } from 'three'
 
 import { formatNumber } from '../format'
 import { useGame } from '../gameStore'
 import { playSound } from '../sound'
 import { WALL_REGEN, wallHp } from '../walls'
+import { geometry, merge } from './geometry'
 import {
   createDynamicLabel,
   createHpBar,
@@ -46,6 +47,32 @@ const DEBRIS_COUNT = 48
 const GRAVITY = -18
 const POPUP_COUNT = 6
 const POPUP_S = 0.9
+/**
+ * Least time between health-bar redraws. The wall heals every frame, so its number
+ * changes every frame, and each change used to redraw a 512x72 canvas and re-upload
+ * it to the GPU - sixty times a second, for every damaged wall in range.
+ */
+const BAR_REDRAW_S = 1 / 12
+
+/**
+ * The four neon bars of the frame as one geometry. Every wall's frame is the same
+ * size, so all of them share this one.
+ */
+const frameGeometry = () =>
+  geometry('wall-frame', () =>
+    merge(
+      [
+        [-(WIDTH + BAR) / 2, FRAME_H / 2, BAR, FRAME_H],
+        [(WIDTH + BAR) / 2, FRAME_H / 2, BAR, FRAME_H],
+        [0, OPEN_H + BAR / 2, FRAME_W + BAR, BAR],
+        [0, 0.05, FRAME_W, 0.1],
+      ].map(([x, y, w, h]) => {
+        const g = new BoxGeometry(w, h, 0.3)
+        g.translate(x, y, 0.05)
+        return g
+      }),
+    ),
+  )
 
 // Scratch objects for the debris matrices.
 const _m = new Matrix4()
@@ -73,17 +100,25 @@ export function StageWall({ number, stage, theme, zFront }) {
   const glowStrength = theme.wall.glow ?? 0
 
   const bar = useMemo(() => createHpBar(), [])
-  const popupLabels = useMemo(
-    () => Array.from({ length: POPUP_COUNT }, () => createDynamicLabel({ aspect: 2.4, width: 256 })),
-    [],
-  )
+  /**
+   * Damage-number canvases, built on the first hit rather than on mount. Most of the
+   * walls in range are only ever walked past, and six canvases each for walls nobody
+   * touches was the largest single use of texture memory in the game.
+   */
+  const popupLabels = useRef(null)
+  const ensureLabels = () => {
+    popupLabels.current ??= Array.from({ length: POPUP_COUNT }, () =>
+      createDynamicLabel({ aspect: 2.4, width: 256 }),
+    )
+    return popupLabels.current
+  }
   useEffect(
     () => () => {
       bar.texture.dispose()
       numberMap.dispose()
-      popupLabels.forEach((label) => label.texture.dispose())
+      popupLabels.current?.forEach((label) => label.texture.dispose())
     },
-    [bar, numberMap, popupLabels],
+    [bar, numberMap],
   )
 
   /** The front and back surface materials, pulsed and flashed every frame. */
@@ -108,6 +143,9 @@ export function StageWall({ number, stage, theme, zFront }) {
     broken: false,
     warnedAt: -Infinity,
     nextDebris: 0,
+    /** Chunks in flight; at zero the debris loop below is skipped entirely. */
+    liveDebris: 0,
+    barAt: -Infinity,
     nextPopup: 0,
     popupAt: [],
     popupX: [],
@@ -142,6 +180,7 @@ export function StageWall({ number, stage, theme, zFront }) {
     for (let n = 0; n < count; n++) {
       const d = s.debris[s.nextDebris]
       s.nextDebris = (s.nextDebris + 1) % DEBRIS_COUNT
+      if (!d.alive) s.liveDebris++
       const r = Math.random
       // Mostly towards the player; a shattering wall throws some the other way too.
       const out = big && r() < 0.35 ? -s.side : s.side
@@ -162,7 +201,13 @@ export function StageWall({ number, stage, theme, zFront }) {
     s.popupAt[i] = now
     s.popupX[i] = s.hitX + (Math.random() - 0.5) * 1.5
     s.popupSide[i] = s.side
-    popupLabels[i].draw({ lines: [{ text: `-${formatNumber(damage)}`, icon: 'sword', fill: ['#ffffff', '#ffb347'] }] })
+    const label = ensureLabels()[i]
+    label.draw({ lines: [{ text: `-${formatNumber(damage)}`, icon: 'sword', fill: ['#ffffff', '#ffb347'] }] })
+    const mesh = popups.current[i]
+    if (mesh && mesh.material.map !== label.texture) {
+      mesh.material.map = label.texture
+      mesh.material.needsUpdate = true
+    }
   }
 
   useFrame(({ camera, clock }, delta) => {
@@ -211,8 +256,11 @@ export function StageWall({ number, stage, theme, zFront }) {
     // Heals all the time, so hits have to outpace it.
     if (!s.broken && s.hp < maxHp) s.hp = Math.min(maxHp, s.hp + maxHp * WALL_REGEN * delta)
     const shown = Math.ceil(s.hp)
-    if (shown !== s.shown) {
+    // Always redraw the moment it empties or comes back to full, so the bar is never
+    // left a frame behind at either end; in between, at BAR_REDRAW_S.
+    if (shown !== s.shown && (now - s.barAt > BAR_REDRAW_S || shown === 0 || shown === maxHp)) {
       s.shown = shown
+      s.barAt = now
       bar.draw(shown, maxHp)
     }
 
@@ -228,7 +276,11 @@ export function StageWall({ number, stage, theme, zFront }) {
 
     // Debris: simple ballistic arcs that stop at the floor and shrink away.
     const mesh = debrisMesh.current
-    if (mesh) {
+    // Nothing in flight: hide the mesh and skip the loop. A wall sits untouched for
+    // almost all of its life, and this ran for every wall in range regardless.
+    const flying = s.liveDebris > 0
+    if (mesh && mesh.visible !== flying) mesh.visible = flying
+    if (mesh && flying) {
       let dirty = false
       for (let i = 0; i < DEBRIS_COUNT; i++) {
         const d = s.debris[i]
@@ -237,6 +289,7 @@ export function StageWall({ number, stage, theme, zFront }) {
         dirty = true
         if (age > d.life) {
           d.alive = false
+          s.liveDebris--
           mesh.setMatrixAt(i, _m.makeScale(0, 0, 0))
           continue
         }
@@ -252,6 +305,8 @@ export function StageWall({ number, stage, theme, zFront }) {
       if (dirty) mesh.instanceMatrix.needsUpdate = true
     }
 
+    // No canvases yet means this wall has never been hit, so there is nothing to fade.
+    if (!popupLabels.current) return
     popups.current.forEach((popup, i) => {
       if (!popup) return
       const age = now - (s.popupAt[i] ?? -Infinity)
@@ -334,12 +389,15 @@ export function StageWall({ number, stage, theme, zFront }) {
         </mesh>
       </group>
 
-      <instancedMesh ref={debrisMesh} args={[undefined, undefined, DEBRIS_COUNT]} frustumCulled={false} castShadow>
+      {/* No castShadow: forty-eight chunks in the shadow pass, for a quarter of a
+          second of flying rubble, is not a trade worth making. */}
+      <instancedMesh ref={debrisMesh} args={[undefined, undefined, DEBRIS_COUNT]} frustumCulled={false} visible={false}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial roughness={0.85} />
       </instancedMesh>
 
-      {popupLabels.map((label, i) => (
+      {/* The map is attached on the first hit, with the canvas - see ensureLabels. */}
+      {Array.from({ length: POPUP_COUNT }, (_, i) => (
         <mesh
           key={i}
           ref={(el) => {
@@ -349,22 +407,14 @@ export function StageWall({ number, stage, theme, zFront }) {
           renderOrder={2}
         >
           <planeGeometry args={[2.6, 1.08]} />
-          <meshBasicMaterial map={label.texture} transparent depthWrite={false} toneMapped={false} />
+          <meshBasicMaterial transparent depthWrite={false} toneMapped={false} />
         </mesh>
       ))}
 
       {/* Neon frame: solid bars plus a pulsing additive halo. */}
-      {[
-        [-(WIDTH + BAR) / 2, FRAME_H / 2, BAR, FRAME_H],
-        [(WIDTH + BAR) / 2, FRAME_H / 2, BAR, FRAME_H],
-        [0, OPEN_H + BAR / 2, FRAME_W + BAR, BAR],
-        [0, 0.05, FRAME_W, 0.1],
-      ].map(([x, y, w, h], i) => (
-        <mesh key={i} position={[x, y, 0.05]}>
-          <boxGeometry args={[w, h, 0.3]} />
-          <meshBasicMaterial color="#d8feff" toneMapped={false} />
-        </mesh>
-      ))}
+      <mesh geometry={frameGeometry()}>
+        <meshBasicMaterial color="#d8feff" toneMapped={false} />
+      </mesh>
       <mesh position={[0, FRAME_H / 2, 0.22]}>
         <planeGeometry args={[FRAME_W + GLOW_MARGIN * 2, FRAME_H + GLOW_MARGIN * 2]} />
         <meshBasicMaterial

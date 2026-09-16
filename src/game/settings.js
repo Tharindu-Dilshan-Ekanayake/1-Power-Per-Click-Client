@@ -14,16 +14,48 @@ import { create } from 'zustand'
  */
 
 /**
- * What each graphics level actually changes. `dpr` is the render resolution range
- * handed to the Canvas (the biggest single lever on a weak GPU), `shadows` turns
- * the shadow map off entirely, and `sparkles` drops the decorative particle
- * systems that ride on top of glowing pets, eggs and pads.
+ * What each graphics level actually changes.
+ *
+ * `dpr` - render resolution, and the biggest single lever on a weak GPU, because it
+ * is the only one that changes how many pixels get shaded. The two slow levels give
+ * it as a plain number, a multiplier on CSS pixels. A `[min, max]` pair, which is
+ * what all four used to be, does something quite different: R3F clamps the
+ * *display's* devicePixelRatio into that range. On the 1x monitor almost every
+ * low-end PC has, `[0.6, 1]` therefore resolved to 1 - identical to Ultra's
+ * `[1, 2]`. Every level rendered at native resolution and the lever did nothing at
+ * all for the machines it exists for. The two fast levels keep a range, where
+ * clamping a Retina display down is the useful behaviour and rendering below native
+ * would only throw detail away.
+ *
+ * `view` - how far from the player the world mounts anything at all (see
+ * world/nearField.js), and the biggest lever on the CPU: an unmounted stage costs
+ * nothing to cull, matrix-update or shadow-test. It is deliberately never small
+ * enough to see, because the stage corridors are walled on both sides and anything
+ * this cuts is already behind something. Below about 60 it starts to show at the far
+ * end of a cabin.
+ *
+ * `shadows` / `shadowMap` - whether there is a shadow pass, and how big its texture
+ * is. A 2048 map is four times the fill of a 1024 one, every frame.
+ *
+ * `sparkles` / `rings` - the decorative particle systems on glowing pets, eggs and
+ * pads, and how many hologram rings rise off each shop pad. There are forty-nine of
+ * those pads, every ring is a blended quad, and blending is what an integrated GPU
+ * is worst at.
+ *
+ * `physicsHz` / `solverIterations` - the CPU side. Rapier runs on a fixed step with
+ * an accumulator, so a machine that drops a frame owes that time back and pays it as
+ * extra steps on the *next* frame, which makes that frame slower still. A weak CPU
+ * can fall into that loop and never climb out, which is the difference between a
+ * game that runs badly and one that locks up. Halving the rate costs half the work
+ * per second and leaves twice the headroom before the loop can start. What the
+ * player actually controls is velocity (see game/Player.jsx), and velocities do not
+ * care what the step size is: the jump clears the 1.2-unit terrace steps either way.
  */
 export const QUALITY = {
-  Low: { dpr: [0.6, 1], shadows: false, sparkles: false },
-  Medium: { dpr: [0.75, 1.25], shadows: true, sparkles: false },
-  High: { dpr: [1, 1.75], shadows: true, sparkles: true },
-  Ultra: { dpr: [1, 2], shadows: true, sparkles: true },
+  Low: { dpr: 0.6, view: 70, shadows: false, shadowMap: 512, sparkles: false, rings: 1, physicsHz: 30, solverIterations: 2 },
+  Medium: { dpr: 0.85, view: 90, shadows: true, shadowMap: 1024, sparkles: false, rings: 2, physicsHz: 30, solverIterations: 4 },
+  High: { dpr: [1, 1.5], view: 110, shadows: true, shadowMap: 2048, sparkles: true, rings: 3, physicsHz: 60, solverIterations: 4 },
+  Ultra: { dpr: [1, 2], view: 140, shadows: true, shadowMap: 2048, sparkles: true, rings: 3, physicsHz: 60, solverIterations: 4 },
 }
 
 /** The level to fall back to for an unknown value from the portal. */

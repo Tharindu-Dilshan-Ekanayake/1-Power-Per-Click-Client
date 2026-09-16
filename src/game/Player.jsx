@@ -49,9 +49,12 @@ const _up = new Vector3(0, 1, 0)
  * on the body transform automatically — no manual per-frame copying.
  *
  * @param {{ position?: [number,number,number], onAvatarReady?: () => void,
- *           bodyRef?: React.MutableRefObject<any> }} props
+ *           bodyRef?: React.MutableRefObject<any>,
+ *           anchorRef?: React.MutableRefObject<any> }} props
+ *   `anchorRef` receives an empty group on the body, which Rapier eases between
+ *   physics steps - what anything following the player should read (playerAnchor.js).
  */
-export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalBodyRef }) {
+export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalBodyRef, anchorRef }) {
   // The follow camera needs to read this body's transform, so the scene may own the
   // ref. Fall back to a local one when used standalone.
   const localBodyRef = useRef(null)
@@ -229,6 +232,8 @@ export function Player({ position = [0, 3, 0], onAvatarReady, bodyRef: externalB
       name="player"
     >
       <CapsuleCollider args={[CAPSULE_HALF_HEIGHT, CAPSULE_RADIUS]} />
+      {/* Empty, and at the body's own origin: the smoothed position to follow. */}
+      <group ref={anchorRef} />
       {/* Avatar origin is at the feet; the capsule origin is at its centre. */}
       <group ref={visualRef} position={[0, -PLAYER_HEIGHT / 2, 0]}>
         {/* The avatar downloads on its own, so the body (and the camera following

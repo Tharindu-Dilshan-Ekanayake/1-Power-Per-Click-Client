@@ -342,7 +342,9 @@ export function buildLayout() {
   // gap. A giant sword statue stands in the middle of the zone.
   const SWORD_Z = midZ(ZONES.swords)
   const SWORD_STEP = 3.9
-  const FRONT_COUNT = 10
+  // 13 on the ground and the rest on the ledge. This is as many as the zone holds:
+  // one more in the front row and its bottom pad pushes through the south fence.
+  const FRONT_COUNT = 13
   const LEDGE_H = 1.2
   const rowHalf = ((FRONT_COUNT - 1) * SWORD_STEP) / 2
   const frontStart = SWORD_Z + rowHalf
@@ -356,8 +358,12 @@ export function buildLayout() {
         : [-(L - 6.8), 0, frontStart - slot * SWORD_STEP],
     }
   })
-  // The ledge is one easy jump high.
-  hill(-L, SWORD_Z - rowHalf - 2.5, -(L - 4.4), SWORD_Z + rowHalf + 2.5, LEDGE_H)
+  // The ledge is one easy jump high, and runs the length of the back row rather than
+  // the front one - the two rows are different lengths, and sizing it off the front
+  // row left the last few back-row pads hanging over the end.
+  const backTop = frontStart - SWORD_STEP / 2
+  const backBottom = backTop - (WINS_SWORDS.length - FRONT_COUNT - 1) * SWORD_STEP
+  hill(-L, backBottom - 2.5, -(L - 4.4), backTop + 2.5, LEDGE_H)
 
   // Between the zone's entrance and the front row of swords.
   const STATUE_X = -18.5
@@ -370,11 +376,18 @@ export function buildLayout() {
 
   // The two Bux blades, on their own platform at the south end of the zone - past
   // the bottom of both shop rows, so there is no mistaking them for part of the
-  // ladder. Well inside the zone's south fence (z0) and clear of the front row's x.
-  const SWORD_VIP = [-18.5, -24]
-  const swordVipY = vipPlatform(SWORD_VIP[0], SWORD_VIP[1], 6.5, 4.5, 'VIP BLADES')
+  // ladder.
+  //
+  // Sized and placed for the gaps AROUND it, not just for what stands on it. The
+  // first cut was 13 wide and left half a unit between its edge and the front row's
+  // pads, which is narrower than the player - you could not walk down your own shop.
+  // Now there is a 3.5 lane on the row side and 3 on the fence side.
+  const SWORD_VIP = [-17.5, -23]
+  const SWORD_VIP_SPREAD = 2.4
+  const swordVipY = vipPlatform(SWORD_VIP[0], SWORD_VIP[1], 4.5, 4.5, 'VIP BLADES')
   BUX_SWORDS.forEach((sword, i) => {
-    swordPads.push({ sword, position: [SWORD_VIP[0] + (i === 0 ? -4 : 4), swordVipY, SWORD_VIP[1]] })
+    const dx = i === 0 ? -SWORD_VIP_SPREAD : SWORD_VIP_SPREAD
+    swordPads.push({ sword, position: [SWORD_VIP[0] + dx, swordVipY, SWORD_VIP[1]] })
   })
 
   // --- Training zone ---------------------------------------------------------------
@@ -382,15 +395,24 @@ export function buildLayout() {
   // raised. Pads are turned to face -X, which puts each dummy (DUMMY_OFFSET_Z in the
   // pad's own frame) on the wall side of its pad.
   const TRAIN_Z = midZ(ZONES.train)
-  const TRAINER_STEP = 4
-  const PER_ROW = 4
+  // Five a row at 3.8 apart is the most this zone takes: a wider step runs the end
+  // pads through the fences, a sixth pad has them overlapping each other.
+  const TRAINER_STEP = 3.8
+  const PER_ROW = 5
+  /** Z of the first pad in each row; both rows are centred on the zone. */
+  const TRAINER_START = TRAIN_Z + ((PER_ROW - 1) * TRAINER_STEP) / 2
   const trainerPads = WINS_TRAINERS.map((trainer, i) => {
     const front = i < PER_ROW
     const slot = front ? i : i - PER_ROW
     return {
       trainer,
-      position: [front ? L - 13.2 : L - 5.2, 0, TRAIN_Z + (front ? 4.5 : 6.5) - slot * TRAINER_STEP],
+      // Both rows sit 0.8 further east than they used to. That spare room existed
+      // between the back row's dummies and the lobby wall and was doing nothing,
+      // while the lane on the other side had no room for the VIP deck AND a path.
+      position: [front ? L - 12.4 : L - 4.4, 0, TRAINER_START - slot * TRAINER_STEP],
       rotationY: -Math.PI / 2,
+      // The rows line up now rather than being staggered half a step - there is no
+      // room left to stagger them - so the back row's signs ride higher instead.
       labelY: front ? 4.9 : 6.4,
     }
   })
@@ -401,14 +423,27 @@ export function buildLayout() {
   // The deck's centre sits east of its pads on purpose: turned the same way as the
   // Wins rows, each dummy stands 2.6 further out in +X than its own pad, so centring
   // the pads would hang both dummies over the edge.
-  const TRAIN_VIP = [14.8, 8]
-  /** Pad centres, a little west of the deck's middle to leave room for the dummies. */
-  const TRAIN_VIP_PAD_X = 14
-  const trainVipY = vipPlatform(TRAIN_VIP[0], TRAIN_VIP[1], 3.9, 4.8, 'VIP TRAINING', { cx: 13.1, w: 4.4 })
+  // The tightest of the three, hemmed in on four sides:
+  //   west   the zone's arch, whose opening is the only way in (z 9..16)
+  //   east   the front row of Wins dummies
+  //   south  the gap cut in the south fence (x 17..23), a path in from the cross walk
+  //   north  the matching gap in the north fence, onto the plaza
+  // So the deck is narrow, sits north of the south gap and south of the north one,
+  // and leaves a 1.8 lane down either side. Walking in through the arch you pass it
+  // rather than climb it.
+  const TRAIN_VIP = [15.1, 10.5]
+  /** Pad centres, west of the deck's middle: each dummy stands 2.6 further east. */
+  const TRAIN_VIP_PAD_X = 14.4
+  const TRAIN_VIP_SPREAD = 2.1
+  const trainVipY = vipPlatform(TRAIN_VIP[0], TRAIN_VIP[1], 2.9, 4.5, 'VIP TRAINING', { cx: 14, w: 3.2 })
   BUX_TRAINERS.forEach((trainer, i) => {
     trainerPads.push({
       trainer,
-      position: [TRAIN_VIP_PAD_X, trainVipY, TRAIN_VIP[1] + (i === 0 ? -2.4 : 2.4)],
+      position: [
+        TRAIN_VIP_PAD_X,
+        trainVipY,
+        TRAIN_VIP[1] + (i === 0 ? -TRAIN_VIP_SPREAD : TRAIN_VIP_SPREAD),
+      ],
       // Same turn as the Wins rows: the dummy ends up on the far side of its pad
       // from the walkway, and you face it with your back to the zone.
       rotationY: -Math.PI / 2,
@@ -438,10 +473,12 @@ export function buildLayout() {
 
   // The Bux egg, on its own platform in the strip between the zone's arch and the
   // front row, at the south end where neither reaches.
-  const EGG_VIP = [15.5, -24.5]
+  // Pushed south of the zone's arch opening (z -22..-15), which it used to sit in
+  // the mouth of, and pulled in off both the fence and the front row.
+  const EGG_VIP = [15.4, -26]
   /** The egg sits on the east half of the deck; the banner gets the west lane. */
-  const EGG_VIP_X = 17.9
-  const eggVipY = vipPlatform(EGG_VIP[0], EGG_VIP[1], 4.5, 4, 'VIP EGG', { cx: 13.2, w: 4.4 })
+  const EGG_VIP_X = 17.3
+  const eggVipY = vipPlatform(EGG_VIP[0], EGG_VIP[1], 3.8, 3, 'VIP EGG', { cx: 13.2, w: 3.6 })
   for (const egg of BUX_EGGS) eggStands.push({ egg, position: [EGG_VIP_X, eggVipY, EGG_VIP[1]] })
 
   /**
