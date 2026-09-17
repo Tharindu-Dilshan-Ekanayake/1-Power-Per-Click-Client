@@ -5,9 +5,19 @@ import { useTouchDevice } from '../game/device'
 import { formatBonus, formatNumber } from '../game/format'
 import { powerMultiplier, useGame } from '../game/gameStore'
 import { petWinsMultiplier } from '../game/pets'
-import { activeBoost, AUTO_CLICKERS, BOOSTS, levelFor, levelPower, MAX_LEVEL, WALK_SPEED } from '../game/progression'
+import {
+  activeBoost,
+  AUTO_CLICKERS,
+  BOOSTS,
+  levelFor,
+  levelPower,
+  MAX_LEVEL,
+  rebirthMultiplier,
+  WALK_SPEED,
+} from '../game/progression'
 import { getTrainer } from '../game/trainers'
 import { PetsButton, PetsPanel } from './PetsPanel'
+import { RebirthButton, RebirthPanel } from './RebirthPanel'
 import { HUD_STRIP_H, reportStripHeight, useTouchScale } from './touchLayout'
 
 /** Chunky outlined game text. */
@@ -385,6 +395,7 @@ function WinsCounter() {
       )}
       <BuxChip />
       <PetsButton />
+      <RebirthButton />
     </div>
   )
 }
@@ -552,6 +563,7 @@ export function GameHUD() {
     return () => observer.disconnect()
   }, [touch])
   const power = useGame((s) => s.power)
+  const rebirths = useGame((s) => s.rebirths)
   const boost = useGame((s) => s.boost)
   const message = useGame((s) => s.message)
   const activeTrainer = useGame((s) => s.activeTrainer)
@@ -585,6 +597,7 @@ export function GameHUD() {
       {/* Wins, the pet bonus, Bux and the Pets button, stacked down the left rail. */}
       <WinsCounter />
       <PetsPanel />
+      <RebirthPanel />
       {message && <Notice message={message} />}
 
       {/*
@@ -619,12 +632,22 @@ export function GameHUD() {
         }
       >
         {level >= MAX_LEVEL ? (
-          <div
-            className={`text-red-500 ${touch ? 'text-center text-xs' : 'text-3xl'}`}
+          /*
+            This used to read "Rebirth needed to level up!" and point at nothing:
+            there was no rebirth in the game, so the one instruction it gave a player
+            who had maxed the bar was an instruction they could not follow. It opens
+            the panel now, and says what the trade is worth.
+          */
+          <button
+            type="button"
+            onClick={() => useGame.getState().toggleRebirthPanel(true)}
+            className={`pointer-events-auto cursor-pointer text-red-400 transition hover:brightness-125 active:translate-y-0.5 ${
+              touch ? 'text-center text-xs' : 'text-3xl'
+            }`}
             style={OUTLINE}
           >
-            Rebirth needed to level up!
-          </div>
+            Level {MAX_LEVEL} MAX &#183; Rebirth for x{rebirthMultiplier(rebirths + 1)} Power!
+          </button>
         ) : (
           power === 0 && (
             <div

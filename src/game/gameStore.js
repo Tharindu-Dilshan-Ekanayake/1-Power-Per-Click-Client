@@ -5,7 +5,16 @@ import { isSignedIn, purchase, showLogin } from '../bloxity/bux'
 import { getEgg } from './eggs'
 import { formatBonus, formatNumber } from './format'
 import { getPet, MAX_EQUIPPED, PETS, petWinsMultiplier } from './pets'
-import { activeBoost, AUTO_CLICKERS, BOOST_S, BOOSTS, levelFor, levelMultiplier } from './progression'
+import {
+  activeBoost,
+  AUTO_CLICKERS,
+  BOOSTS,
+  BOOST_S,
+  canRebirth,
+  levelFor,
+  levelMultiplier,
+  rebirthMultiplier,
+} from './progression'
 import { playSound } from './sound'
 import { DEFAULT_SWORD, getSword } from './swords'
 import { getTrainer, TRAINERS } from './trainers'
@@ -16,9 +25,15 @@ import { padPower, padUnlocked, padWins, WALL_RESET_DELAY_S, WALLS_PER_STAGE, wa
 export const clickGain = (sword, trainer, multiplier = 1) =>
   Math.max(1, Math.round(sword.power * (trainer?.multiplier ?? 1) * multiplier))
 
-/** Level times any running boost: everything that multiplies a click, bar training. */
-export const powerMultiplier = ({ power, boost }, now = Date.now()) =>
-  levelMultiplier(levelFor(power)) * (activeBoost(boost, now)?.multiplier ?? 1)
+/**
+ * Level times any running boost times every rebirth earned: everything that
+ * multiplies a click, bar training.
+ *
+ * `rebirths` is read with a default so that a caller passing an older slice - or a
+ * save from before rebirths existed - multiplies by one rather than by undefined.
+ */
+export const powerMultiplier = ({ power, boost, rebirths = 0 }, now = Date.now()) =>
+  levelMultiplier(levelFor(power)) * (activeBoost(boost, now)?.multiplier ?? 1) * rebirthMultiplier(rebirths)
 
 const MESSAGE_MS = 2600
 /** Matches the `click-popup` animation in index.css. */
@@ -36,6 +51,8 @@ export const useGame = create(
   persist(
     (set, get) => ({
       power: 0,
+      /** Rebirths completed. Every one is a permanent multiplier on every click. */
+      rebirths: 0,
       wins: 0,
       owned: [DEFAULT_SWORD],
       equipped: DEFAULT_SWORD,
@@ -47,6 +64,8 @@ export const useGame = create(
        */
       equippedPets: [],
       /** Whether the Pets panel is open. Not saved: it starts closed every session. */
+      /** Whether the Rebirth panel is open. */
+      rebirthOpen: false,
       petsOpen: false,
       /** Which pet's card the Pets panel is showing on the right, or null. */
       petsSelected: null,
@@ -310,6 +329,29 @@ export const useGame = create(
       /** Show this pet on the Pets panel's detail card; null closes it. */
       selectPet: (id) => set({ petsSelected: id }),
 
+      toggleRebirthPanel: (open) => set((s) => ({ rebirthOpen: open ?? !s.rebirthOpen })),
+
+      /**
+       * Spend every point of Power for a permanent multiplier on every future click.
+       *
+       * Only `power` is given up. Wins, swords, pets, trainers, boosts and anything
+       * bought with Bux are all left exactly as they were - a button that took back
+       * something the player had paid for would be a trap, and this one is meant to
+       * be pressed.
+       *
+       * Guarded rather than trusted: the panel disables the button when it cannot be
+       * afforded, but the check lives here too, so no path into this - a stale panel,
+       * a double click, a future auto-rebirth - can zero someone's Power for nothing.
+       */
+      rebirth: () => {
+        const { power, rebirths, notify } = get()
+        if (!canRebirth(power, rebirths)) return
+        const next = rebirths + 1
+        set({ power: 0, rebirths: next, rebirthOpen: false })
+        playSound('unlock')
+        notify(`Rebirth ${next}! Every click is now x${rebirthMultiplier(next)} Power`, 'success')
+      },
+
       /**
        * E at a sword pad: equip it if owned, otherwise try to buy it.
        *
@@ -527,7 +569,7 @@ export const useGame = create(
     }),
     {
       name: 'ppc-progress',
-      version: 3,
+      version: 4,
       migrate: (state, version) => {
         if (!state) return state
         let next = state
@@ -538,10 +580,14 @@ export const useGame = create(
         }
         // v2 predates Bux passes, so nobody who saved it owns one.
         if (version < 3) next = { ...next, ownedPasses: [] }
+        // v3 predates rebirths. Everyone who saved it starts at none, which is the
+        // same x1 they have been playing with - nothing they earned changes value.
+        if (version < 4) next = { ...next, rebirths: 0 }
         return next
       },
       partialize: ({
         power,
+        rebirths,
         wins,
         owned,
         equipped,
@@ -555,6 +601,7 @@ export const useGame = create(
         ownedPasses,
       }) => ({
         power,
+        rebirths,
         wins,
         owned,
         equipped,
