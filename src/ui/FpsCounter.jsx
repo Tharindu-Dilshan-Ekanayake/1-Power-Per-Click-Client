@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 import { useSettings } from '../game/settings'
+import { CHIP } from './textStyle'
 
 /** How often the readout updates. Per-frame would be unreadable. */
 const SAMPLE_MS = 500
@@ -46,7 +47,7 @@ export function FpsCounter() {
       style={{
         borderColor: '#1b1b25',
         background: '#000000aa',
-        fontFamily: '"Arial Black", "Segoe UI Black", Impact, sans-serif',
+        ...CHIP,
       }}
     >
       — FPS

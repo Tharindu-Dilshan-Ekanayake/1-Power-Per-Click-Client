@@ -1,6 +1,7 @@
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace } from 'three'
 
 import { formatNumber } from '../format'
+import { FONT_WEIGHT, GAME_FONT } from '../font'
 
 /**
  * Procedural canvas textures. Everything is drawn at runtime, so the map ships with
@@ -13,7 +14,7 @@ export const STUD = 0.35
 /** World size of one repeat of the panel texture. */
 export const PANEL_TILE = 4
 
-const FONT = '"Arial Black", "Segoe UI Black", Impact, sans-serif'
+const FONT = GAME_FONT
 
 const textureCache = new Map()
 
@@ -451,7 +452,7 @@ export function createWallNumber(number) {
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.lineJoin = 'round'
-  ctx.font = `900 88px ${FONT}`
+  ctx.font = `${FONT_WEIGHT.heavy} 88px ${FONT}`
 
   ctx.lineWidth = 16
   ctx.strokeStyle = 'rgba(0,0,0,0.4)'
@@ -512,7 +513,7 @@ export function createHpBar() {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.lineJoin = 'round'
-    ctx.font = `900 38px ${FONT}`
+    ctx.font = `${FONT_WEIGHT.heavy} 38px ${FONT}`
     ctx.lineWidth = 9
     ctx.strokeStyle = outline
     ctx.strokeText(label, w / 2, h / 2 + 2)
@@ -763,14 +764,33 @@ function drawIcon(ctx, kind, x, y, s) {
     ctx.lineTo(94, 40)
     ctx.lineWidth = 6
     ctx.stroke()
+  } else if (kind === 'star') {
+    // The rebirth star, to mark a price paid in rebirths rather than in a currency.
+    const gold = ctx.createLinearGradient(0, 0, 0, 100)
+    gold.addColorStop(0, '#fff3b0')
+    gold.addColorStop(1, '#f0a000')
+    ctx.beginPath()
+    for (let i = 0; i < 10; i++) {
+      // Alternate between the points and the valleys between them, starting at the
+      // top so the star sits upright.
+      const angle = -Math.PI / 2 + (i * Math.PI) / 5
+      const r = i % 2 === 0 ? 46 : 19
+      ctx[i === 0 ? 'moveTo' : 'lineTo'](50 + Math.cos(angle) * r, 50 + Math.sin(angle) * r)
+    }
+    ctx.closePath()
+    ctx.lineWidth = 12
+    ctx.strokeStyle = outline
+    ctx.stroke()
+    ctx.fillStyle = gold
+    ctx.fill()
   }
   ctx.restore()
 }
 
 /**
  * Text sign. `lines` are strings or `{ text, scale, fill, icon }`; `fill` may be a
- * list of colours for a vertical gradient, and `icon` ('trophy' | 'sword' | 'bux') is drawn
- * before the text.
+ * list of colours for a vertical gradient, and `icon` ('trophy' | 'sword' | 'bux' |
+ * 'star') is drawn before the text.
  */
 export function labelTexture({
   lines,
@@ -840,14 +860,14 @@ function drawLabel(ctx, w, h, { lines, fill = '#ffffff', stroke = '#1b1b25', bg 
   for (const item of items) {
     const lineH = unit * (item.scale ?? 1)
     let size = lineH * 0.78
-    ctx.font = `900 ${size}px ${FONT}`
+    ctx.font = `${FONT_WEIGHT.heavy} ${size}px ${FONT}`
     // An icon is drawn one text-height square, plus a small gap, left of the text.
     const iconRatio = item.icon ? 1.15 : 0
     const measured = ctx.measureText(item.text).width + size * iconRatio
     const maxW = w - pad * 2
     if (measured > maxW) {
       size *= maxW / measured
-      ctx.font = `900 ${size}px ${FONT}`
+      ctx.font = `${FONT_WEIGHT.heavy} ${size}px ${FONT}`
     }
     const iconW = size * iconRatio
     const x = (w - ctx.measureText(item.text).width - iconW) / 2 + iconW

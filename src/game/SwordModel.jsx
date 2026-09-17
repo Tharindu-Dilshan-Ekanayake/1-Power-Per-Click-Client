@@ -27,12 +27,21 @@ const swordParts = () =>
       g.translate(x, y, z)
       return g
     }
+    /*
+     * Chunkier than it was. The blade used to be 0.16 across and 0.05 deep - seven
+     * times longer than it was wide, and thin enough that turning side-on very
+     * nearly made it disappear. Held at arm's length on a moving character it read
+     * as a stick rather than a sword. These are the proportions the blocky games
+     * this one is modelled on use: wide enough to catch the light from any angle,
+     * and deep enough to still be there when the swing turns it edge-on.
+     */
     return {
-      grip: box(0.09, 0.34, 0.09, 0, 0, 0),
-      trim: merge([box(0.15, 0.1, 0.15, 0, -0.21, 0), box(0.48, 0.09, 0.14, 0, 0.21, 0)]),
+      grip: box(0.11, 0.34, 0.11, 0, 0, 0),
+      trim: merge([box(0.18, 0.12, 0.18, 0, -0.21, 0), box(0.56, 0.12, 0.19, 0, 0.21, 0)]),
       // Blade, plus the point: a square turned 45°, centred on the blade's top edge.
-      blade: merge([box(0.16, 1.2, 0.05, 0, 0.86, 0), box(0.113, 0.113, 0.05, 0, 1.46, 0, Math.PI / 4)]),
-      edges: merge([box(0.04, 1.05, 0.004, 0, 0.84, -0.027), box(0.04, 1.05, 0.004, 0, 0.84, 0.027)]),
+      blade: merge([box(0.22, 1.2, 0.09, 0, 0.86, 0), box(0.155, 0.155, 0.09, 0, 1.46, 0, Math.PI / 4)]),
+      // The bright strips run just proud of each face, so they sit on the new depth.
+      edges: merge([box(0.05, 1.05, 0.004, 0, 0.84, -0.047), box(0.05, 1.05, 0.004, 0, 0.84, 0.047)]),
     }
   })
 

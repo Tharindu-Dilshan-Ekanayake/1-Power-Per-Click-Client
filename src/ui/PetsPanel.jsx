@@ -9,15 +9,8 @@ import { useGame } from '../game/gameStore'
 import { MAX_EQUIPPED, PETS, petWinsMultiplier } from '../game/pets'
 import { PetModel } from '../game/world/PetModel'
 import { shade } from '../game/world/textures'
+import { CHIP, OUTLINE } from './textStyle'
 
-/** Chunky outlined game text, same as the rest of the HUD. */
-const OUTLINE = {
-  fontFamily: '"Arial Black", "Segoe UI Black", Impact, sans-serif',
-  WebkitTextStroke: '1.5px #111',
-  textShadow: '0 3px 0 rgba(0,0,0,0.85), 0 0 8px rgba(0,0,0,0.5)',
-}
-/** Small chips and badges: the same font, minus the stroke that would eat them. */
-const CHIP = { ...OUTLINE, WebkitTextStroke: '0', textShadow: 'none' }
 const INK = '#1b1b25'
 const GREEN = '#5fe64c'
 
@@ -35,6 +28,13 @@ const TIERS = [
   { upto: Infinity, name: 'Mythic', colors: ['#ff8ae8', '#8a4dff'], text: '#2a0640' },
 ]
 const tierOf = (bonus) => TIERS.find((t) => bonus <= t.upto)
+
+/**
+ * Emoji are drawn by the system font and carry none of the weight the outlined text
+ * beside them has. A drop shadow puts them on the same footing, so they read as part
+ * of the artwork rather than as characters that wandered in.
+ */
+const EMOJI = { filter: 'drop-shadow(0 2px 0 rgba(0,0,0,0.55)) drop-shadow(0 0 6px rgba(0,0,0,0.35))' }
 
 /** Chunky outlined button: dark border, gradient face and a darker bottom lip. */
 function PanelButton({ colors, onClick, disabled, className = '', children }) {
@@ -457,7 +457,11 @@ export function PetsButton() {
       }}
     >
       <span className="pointer-events-none absolute inset-x-2 top-1 h-1.5 rounded-full bg-white/35" />
-      <PawIcon className={touch ? 'h-6 w-6' : 'h-9 w-9'} />
+      {/* The dog, matching the reference art. The drawn paw it replaced is still
+          used inside the panel, where it is small and wants a flat silhouette. */}
+      <span className={touch ? 'text-xl' : 'text-3xl'} style={EMOJI} aria-hidden>
+        🐶
+      </span>
       <span className={`text-white ${touch ? 'text-[10px]' : 'text-sm'}`} style={CHIP}>
         Pets
       </span>

@@ -3,13 +3,9 @@ import { useEffect, useState } from 'react'
 
 import { useBloxity } from '../bloxity/BloxityContext'
 import { useLoading } from '../game/loadingStore'
+import { OUTLINE_BIG as OUTLINE } from './textStyle'
 
 /** Chunky outlined game text, as in the HUD. */
-const OUTLINE = {
-  fontFamily: '"Arial Black", "Segoe UI Black", Impact, sans-serif',
-  WebkitTextStroke: '2px #111',
-  textShadow: '0 4px 0 rgba(0,0,0,0.85), 0 0 10px rgba(0,0,0,0.5)',
-}
 
 /** Past this, the game opens even if the avatar is still downloading (a stand-in is shown). */
 const AVATAR_TIMEOUT_MS = 15000
