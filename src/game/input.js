@@ -12,9 +12,17 @@
  * matters more in the moment a player switches between the two.
  */
 
-/** Movement is a vector, not four flags: a thumbstick can ask to go half speed. */
-const keyboard = { x: 0, z: 0, jump: false, sprint: false }
-const touch = { x: 0, z: 0, jump: false, sprint: false }
+/**
+ * Movement is a vector, not four flags: a thumbstick can ask to go half speed.
+ *
+ * `turn` is separate from `x` because the two are different jobs. `x` steps the
+ * character sideways without changing where they are looking; `turn` swings the
+ * camera and leaves the character where it is. A and D do the first, the arrow keys
+ * do the second, and a player who wants to sidestep round a training dummy and a
+ * player who wants to look at what is behind them both get a key that does it.
+ */
+const keyboard = { x: 0, z: 0, turn: 0, jump: false, sprint: false }
+const touch = { x: 0, z: 0, turn: 0, jump: false, sprint: false }
 
 /**
  * @param {number} x -1 (left) to 1 (right), camera-relative
@@ -23,6 +31,11 @@ const touch = { x: 0, z: 0, jump: false, sprint: false }
 export function setKeyboardMove(x, z) {
   keyboard.x = x
   keyboard.z = z
+}
+
+/** @param {number} turn -1 (swing the camera left) to 1 (right) */
+export const setKeyboardTurn = (turn) => {
+  keyboard.turn = turn
 }
 
 export const setKeyboardJump = (down) => {
@@ -49,6 +62,7 @@ export function releaseAll() {
   for (const source of [keyboard, touch]) {
     source.x = 0
     source.z = 0
+    source.turn = 0
     source.jump = false
     source.sprint = false
   }
@@ -73,6 +87,17 @@ export function readInput(out) {
   out.jump = keyboard.jump || touch.jump
   out.sprint = keyboard.sprint || touch.sprint
   return out
+}
+
+/**
+ * How hard the camera is being asked to swing, -1 (left) to 1 (right).
+ *
+ * Read by FollowCamera rather than by the player, because turning is a thing the
+ * camera does. It is a rate, not an angle: the camera applies it per second, so
+ * holding the key sweeps rather than jumping.
+ */
+export function readTurn() {
+  return Math.max(-1, Math.min(1, keyboard.turn + touch.turn))
 }
 
 /**

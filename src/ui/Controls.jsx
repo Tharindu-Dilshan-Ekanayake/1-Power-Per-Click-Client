@@ -2,13 +2,14 @@ import { useTouchDevice } from '../game/device'
 
 /** [key, what it does] — the whole control scheme, in the order you meet it. */
 const ROWS = [
-  ['W A S D', 'move'],
+  ['W  S', 'walk forward / back'],
+  ['A  D', 'turn the camera'],
   ['Space', 'jump'],
   ['Shift', 'sprint'],
   ['Left-click', 'swing sword / hit walls'],
   ['E', 'buy / unlock / equip / open'],
   ['Hold E', 'cash in at a Win pad'],
-  ['Right-drag', 'rotate camera'],
+  ['Right-drag', 'turn the camera'],
   ['Scroll', 'zoom'],
   ['M', 'sound on / off'],
 ]
