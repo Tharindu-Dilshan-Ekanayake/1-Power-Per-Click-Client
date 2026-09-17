@@ -56,10 +56,12 @@ export function Portal({ position, rotationY = 0, target, requiresWall = 0 }) {
     <group position={position} rotation={[0, rotationY, 0]}>
       <mesh ref={front} position={[0, CENTER_Y, 0.05]}>
         <circleGeometry args={[RADIUS, 48]} />
+        {/* forceSinglePass: see the note in world/Effects.jsx. */}
         <meshBasicMaterial
           map={swirlTexture()}
           transparent
           side={DoubleSide}
+          forceSinglePass
           depthWrite={false}
           toneMapped={false}
         />
@@ -72,6 +74,7 @@ export function Portal({ position, rotationY = 0, target, requiresWall = 0 }) {
           opacity={0.6}
           blending={AdditiveBlending}
           side={DoubleSide}
+          forceSinglePass
           depthWrite={false}
           toneMapped={false}
         />

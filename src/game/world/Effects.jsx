@@ -116,6 +116,26 @@ export function Clouds() {
  */
 const PAD_SEGMENTS = 16
 
+/**
+ * Why every see-through, two-sided material in the game says `forceSinglePass`.
+ *
+ * three.js draws a material that is `transparent` *and* `DoubleSide` twice - back
+ * faces, then front faces - so that a see-through shape sorts against itself. It
+ * also flips `material.side` between the two passes and sets `needsUpdate` each
+ * time, and `needsUpdate` means "work the whole shader out again from scratch". So
+ * every glow in view cost two draw calls and two full shader-parameter lookups in
+ * every single frame, for its whole life.
+ *
+ * Nothing here needs the second pass. These are all additively blended and none of
+ * them writes depth, and addition does not care what order it happens in: back then
+ * front and front then back give the same pixel. (The portal's swirl is a flat
+ * circle, where the two passes draw the same quad twice over.) `forceSinglePass`
+ * tells three exactly that, and the picture is unchanged.
+ *
+ * It was the largest single cost in the game: thirty-seven of these were in view at
+ * once on the lowest graphics level and a hundred and twenty-eight on High.
+ */
+
 /** Glowing floor pad with a light beam and rising sparkles. */
 export function GlowPad({ position, color, radius = 1.8, beamHeight = 6 }) {
   const beam = useRef(null)
@@ -142,6 +162,7 @@ export function GlowPad({ position, color, radius = 1.8, beamHeight = 6 }) {
           blending={AdditiveBlending}
           depthWrite={false}
           side={DoubleSide}
+          forceSinglePass
           toneMapped={false}
         />
       </mesh>

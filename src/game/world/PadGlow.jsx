@@ -103,7 +103,8 @@ export function PadGlow({
           scale={plane}
           renderOrder={1}
         >
-          <meshBasicMaterial map={map} opacity={0} side={DoubleSide} {...glow} />
+          {/* forceSinglePass: see the note in world/Effects.jsx. */}
+          <meshBasicMaterial map={map} opacity={0} side={DoubleSide} forceSinglePass {...glow} />
         </mesh>
       ))}
 

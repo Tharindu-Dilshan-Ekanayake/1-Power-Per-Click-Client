@@ -1,5 +1,5 @@
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 import { getMaterial, worldBoxGeometry } from './materials'
@@ -13,6 +13,7 @@ import { getMaterial, worldBoxGeometry } from './materials'
  * @param {{ blocks: { p: number[], s: number[], m: string, c: boolean }[] }} props
  */
 export function StaticBlocks({ blocks }) {
+  const colliderHost = useRef(null)
   const meshes = useMemo(() => {
     const byMaterial = new Map()
     for (const block of blocks) {
@@ -32,6 +33,32 @@ export function StaticBlocks({ blocks }) {
 
   const solid = useMemo(() => blocks.filter((b) => b.c), [blocks])
 
+  /**
+   * Take the colliders out of the per-frame scene walk.
+   *
+   * Every <CuboidCollider> is also an Object3D, and there are two and a half
+   * thousand of them - two thirds of everything in the scene. They draw nothing and
+   * they never move, but three.js does not know that: it recomposed all of their
+   * matrices in updateMatrixWorld and then walked them all again in the renderer's
+   * culling pass, every single frame. That was the largest remaining cost in the
+   * whole game once the shader thrash was gone.
+   *
+   * `matrixWorldAutoUpdate` stops the matrix walk descending here at all, and
+   * `visible` does the same for the culling pass - three skips a hidden subtree
+   * outright. Nothing is lost by hiding them because there was never anything here
+   * to see; Rapier reads the collider shapes from its own world, not from these.
+   *
+   * A parent's effect runs after its children's, so the colliders are already built
+   * by the time this fires.
+   */
+  useEffect(() => {
+    const host = colliderHost.current
+    if (!host) return
+    host.updateMatrixWorld(true)
+    host.matrixWorldAutoUpdate = false
+    host.visible = false
+  }, [solid])
+
   return (
     <>
       {meshes.map((m) => (
@@ -43,11 +70,13 @@ export function StaticBlocks({ blocks }) {
           receiveShadow={m.shadow}
         />
       ))}
-      <RigidBody type="fixed" colliders={false} name="map">
-        {solid.map((b, i) => (
-          <CuboidCollider key={i} args={[b.s[0] / 2, b.s[1] / 2, b.s[2] / 2]} position={b.p} />
-        ))}
-      </RigidBody>
+      <group ref={colliderHost}>
+        <RigidBody type="fixed" colliders={false} name="map">
+          {solid.map((b, i) => (
+            <CuboidCollider key={i} args={[b.s[0] / 2, b.s[1] / 2, b.s[2] / 2]} position={b.p} />
+          ))}
+        </RigidBody>
+      </group>
     </>
   )
 }

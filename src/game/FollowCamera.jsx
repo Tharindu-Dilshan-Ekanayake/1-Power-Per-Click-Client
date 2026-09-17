@@ -3,6 +3,7 @@ import { useRapier } from '@react-three/rapier'
 import { useEffect, useRef } from 'react'
 import { Vector3 } from 'three'
 
+import { readTurn } from './input'
 import { playerPosition } from './playerAnchor'
 import { useSettings } from './settings'
 
@@ -55,6 +56,17 @@ const ZOOM_SENSITIVITY = 0.01
 const TOUCH_SENSITIVITY = 0.006
 /** Pixels of pinch per unit of zoom. */
 const PINCH_SENSITIVITY = 0.02
+
+/**
+ * Radians a second the arrow keys swing the view (see game/useKeyboard.js).
+ *
+ * A rate, not a step: held down this sweeps rather than ratcheting, and it does not
+ * change with the frame rate. At 2.2 a full turn takes just under three seconds,
+ * which is brisk enough to spin round and look behind you without overshooting what
+ * you were trying to line up on. Scaled by the portal's camera_sensitivity, same as
+ * the mouse, so one slider moves both.
+ */
+const KEY_TURN_RATE = 2.2
 
 /**
  * How fast the camera catches up with the player. Higher = snappier;
@@ -314,6 +326,13 @@ export function FollowCamera({ bodyRef, anchorRef }) {
     // here is what used to make the whole world judder against the avatar.
     if (!playerPosition(anchorRef, bodyRef, _target)) return
     _target.y += LOOK_HEIGHT
+
+    // The arrow keys turn the view. Same sign as a drag to the right, which also
+    // lowers yaw - see onPointerMove.
+    const turn = readTurn()
+    if (turn !== 0) {
+      orbit.current.yaw -= turn * KEY_TURN_RATE * useSettings.getState().cameraSensitivity * delta
+    }
 
     const teleported = _lastTarget.distanceTo(_target) > TELEPORT_DISTANCE
     _lastTarget.copy(_target)

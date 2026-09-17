@@ -127,6 +127,7 @@ export function WinPad({ number, pad, position }) {
       </mesh>
       <mesh position={[0, 0.23 + BEAM_H / 2, 0]} rotation={[0, Math.PI / 4, 0]}>
         <cylinderGeometry args={[(SIZE / 2) * Math.SQRT2 * 0.95, (SIZE / 2) * Math.SQRT2, BEAM_H, 4, 1, true]} />
+        {/* forceSinglePass: see the note in world/Effects.jsx. */}
         <meshBasicMaterial
           ref={beam}
           map={beamTexture()}
@@ -135,6 +136,7 @@ export function WinPad({ number, pad, position }) {
           blending={AdditiveBlending}
           depthWrite={false}
           side={DoubleSide}
+          forceSinglePass
           toneMapped={false}
         />
       </mesh>

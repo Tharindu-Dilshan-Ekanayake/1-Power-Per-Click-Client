@@ -44,6 +44,14 @@ import { isTouchDevice } from './device'
  * those pads, every ring is a blended quad, and blending is what an integrated GPU
  * is worst at.
  *
+ * `antialias` - whether the canvas gets a multisampled buffer. Off below High, and
+ * it is the one setting here that cannot be changed without reloading: the sample
+ * count belongs to the drawing buffer, which is fixed when the renderer is built
+ * (see game/GameScene.jsx). Off costs nothing on the slow levels anyway - they
+ * already render below native resolution, so the edges are soft before any of the
+ * samples are spent, and four samples per pixel of bandwidth is exactly what an
+ * integrated GPU has least of.
+ *
  * `physicsHz` / `solverIterations` - the CPU side. Rapier runs on a fixed step with
  * an accumulator, so a machine that drops a frame owes that time back and pays it as
  * extra steps on the *next* frame, which makes that frame slower still. A weak CPU
@@ -54,10 +62,10 @@ import { isTouchDevice } from './device'
  * care what the step size is: the jump clears the 1.2-unit terrace steps either way.
  */
 export const QUALITY = {
-  Low: { dpr: 0.6, view: 70, shadows: false, shadowMap: 512, sparkles: false, rings: 1, physicsHz: 30, solverIterations: 2 },
-  Medium: { dpr: 0.85, view: 90, shadows: true, shadowMap: 1024, sparkles: false, rings: 2, physicsHz: 30, solverIterations: 4 },
-  High: { dpr: [1, 1.5], view: 110, shadows: true, shadowMap: 2048, sparkles: true, rings: 3, physicsHz: 60, solverIterations: 4 },
-  Ultra: { dpr: [1, 2], view: 140, shadows: true, shadowMap: 2048, sparkles: true, rings: 3, physicsHz: 60, solverIterations: 4 },
+  Low: { dpr: 0.6, view: 70, shadows: false, shadowMap: 512, sparkles: false, rings: 1, physicsHz: 30, solverIterations: 2, antialias: false },
+  Medium: { dpr: 0.85, view: 90, shadows: true, shadowMap: 1024, sparkles: false, rings: 2, physicsHz: 30, solverIterations: 4, antialias: false },
+  High: { dpr: [1, 1.5], view: 110, shadows: true, shadowMap: 2048, sparkles: true, rings: 3, physicsHz: 60, solverIterations: 4, antialias: true },
+  Ultra: { dpr: [1, 2], view: 140, shadows: true, shadowMap: 2048, sparkles: true, rings: 3, physicsHz: 60, solverIterations: 4, antialias: true },
 }
 
 /**
@@ -70,9 +78,34 @@ export const QUALITY = {
  */
 const DEFAULT_QUALITY = isTouchDevice() ? 'Low' : 'High'
 
+/**
+ * The last level this player chose, remembered locally.
+ *
+ * The portal is still the owner of the setting and still pushes the real value -
+ * this is only a guess at what that value will be, and it is overwritten the moment
+ * the push lands. It exists because of the one thing the push is too late for: the
+ * renderer's multisample buffer is built with the canvas, before any setting has
+ * arrived (see game/GameScene.jsx). Without this, a player on a slow machine who
+ * had chosen Low was handed a High renderer on every single visit, and the only
+ * setting that could have spared them was the one that could never reach it in time.
+ *
+ * Wrapped because storage is not always there to be read: a private window, blocked
+ * site data, or an embedding the browser treats as third-party all throw here.
+ */
+const QUALITY_KEY = 'ppc:quality'
+
+const rememberedQuality = () => {
+  try {
+    const saved = localStorage.getItem(QUALITY_KEY)
+    return QUALITY[saved] ? saved : DEFAULT_QUALITY
+  } catch {
+    return DEFAULT_QUALITY
+  }
+}
+
 export const useSettings = create(() => ({
   /** One of the QUALITY keys. */
-  quality: DEFAULT_QUALITY,
+  quality: rememberedQuality(),
   /** Whether to draw the FPS counter. */
   showFps: false,
   /** Multiplies the camera's right-drag speed; 1 is the game's own default. */
@@ -86,6 +119,11 @@ export const qualityOf = (level) => QUALITY[level] ?? QUALITY[DEFAULT_QUALITY]
 export function setQuality(level) {
   if (!QUALITY[level]) return
   useSettings.setState({ quality: level })
+  try {
+    localStorage.setItem(QUALITY_KEY, level)
+  } catch {
+    // Storage is a convenience here; the portal remembers the real setting.
+  }
 }
 
 export const setShowFps = (showFps) => useSettings.setState({ showFps: Boolean(showFps) })
