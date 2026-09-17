@@ -28,8 +28,15 @@ import { useGame } from './gameStore'
 import SwordModel from './SwordModel'
 import { getSword } from './swords'
 
-/** Held sword size relative to its shop model. */
-const HELD_SCALE = 0.75
+/**
+ * Held sword size relative to its shop model.
+ *
+ * Not larger than this, however tempting. The later blades carry their own `size` on
+ * top of it - the Prism Blade is 1.95 - so every increase here is multiplied by two
+ * at the top of the shop, and a sword much past this one starts passing through the
+ * player and the floor on the downswing.
+ */
+const HELD_SCALE = 0.95
 /** Blade points forward (+Z) and tilted up a little, rather than straight up. */
 const HELD_ROTATION = [Math.PI / 2 - 0.35, 0, 0]
 /** The held sword always glows a little, even a plain one with no glow of its own. */

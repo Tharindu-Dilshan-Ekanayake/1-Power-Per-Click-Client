@@ -3,10 +3,10 @@ import { useEffect, useState } from 'react'
 import { useTouchDevice } from '../game/device'
 import { formatNumber } from '../game/format'
 import { useGame } from '../game/gameStore'
+import { CHIP, OUTLINE } from './textStyle'
 import {
   canRebirth,
   levelFor,
-  MAX_LEVEL,
   MAX_REBIRTHS,
   rebirthMultiplier,
   rebirthPower,
@@ -28,14 +28,6 @@ import {
  * what else goes with it simply never presses it.
  */
 
-/** Chunky outlined game text, same as the rest of the HUD. */
-const OUTLINE = {
-  fontFamily: '"Arial Black", "Segoe UI Black", Impact, sans-serif',
-  WebkitTextStroke: '1.5px #111',
-  textShadow: '0 3px 0 rgba(0,0,0,0.85), 0 0 8px rgba(0,0,0,0.5)',
-}
-/** Small chips and badges: the same font, minus the stroke that would eat them. */
-const CHIP = { ...OUTLINE, WebkitTextStroke: '0', textShadow: 'none' }
 const INK = '#1b1b25'
 
 /** Chunky outlined button: dark border, gradient face and a darker bottom lip. */
@@ -60,7 +52,15 @@ function PanelButton({ colors, onClick, disabled, className = '', children }) {
   )
 }
 
-/** One "current" or "after" tile: an emoji and the value it stands for. */
+/**
+ * Emoji are drawn by the system font, which gives them none of the weight the rest
+ * of the panel has. A drop shadow underneath puts them on the same footing as the
+ * outlined text beside them, so they read as part of the artwork rather than as
+ * characters that wandered in.
+ */
+const EMOJI = { filter: 'drop-shadow(0 2px 0 rgba(0,0,0,0.55)) drop-shadow(0 0 6px rgba(0,0,0,0.35))' }
+
+/** One "current" or "after" tile: an icon and the value it stands for. */
 function Tile({ emoji, value, bright, touch }) {
   return (
     <div
@@ -75,7 +75,7 @@ function Tile({ emoji, value, bright, touch }) {
         boxShadow: 'inset 0 -5px 0 rgba(0,0,0,0.22)',
       }}
     >
-      <span className={touch ? 'text-2xl' : 'text-4xl'} aria-hidden>
+      <span className={touch ? 'text-3xl' : 'text-5xl'} style={EMOJI} aria-hidden>
         {emoji}
       </span>
       <span className={`text-white ${touch ? 'text-2xl' : 'text-4xl'}`} style={OUTLINE}>
@@ -217,10 +217,18 @@ function RebirthDialog() {
             onClick={() => (confirming ? useGame.getState().rebirth() : setConfirming(true))}
             className={touch ? 'text-xl' : 'text-3xl'}
           >
+            {/*
+              What is missing, in Power, because Power is the only thing the gate
+              actually measures. This used to read "Reach Level 20 to Rebirth",
+              which is true of the first rebirth and a lie about every one after it:
+              the second costs five times what the last level does, so a player
+              standing at Level 20 - with the panel's own header saying Level 20 -
+              was being told to go and reach the level they were already on.
+            */}
             {maxedOut
               ? 'Nothing left to Rebirth'
               : !ready
-                ? `Reach Level ${MAX_LEVEL} to Rebirth`
+                ? `${formatNumber(need - power)} more Power`
                 : confirming
                   ? 'Tap again to confirm'
                   : 'Rebirth'}
@@ -238,9 +246,79 @@ function RebirthDialog() {
   )
 }
 
+/**
+ * The burst that plays when a rebirth actually happens.
+ *
+ * Mounted for the whole session and almost always rendering nothing. It watches the
+ * rebirth count rather than being fired by the button, so it plays wherever the
+ * rebirth came from - the panel now, an auto-rebirth later - and cannot be missed by
+ * a code path that forgot to call it.
+ *
+ * Keyed on the count, which is what restarts the animation: a second rebirth
+ * replaces the element rather than re-running a class on the old one, and CSS
+ * animations do not restart on their own.
+ */
+function RebirthBurst() {
+  const rebirths = useGame((s) => s.rebirths)
+  const touch = useTouchDevice()
+  // The count at mount is history, not an event - nobody wants a burst on page load.
+  const [seen, setSeen] = useState(rebirths)
+  const [playing, setPlaying] = useState(0)
+
+  if (rebirths !== seen) {
+    // Render-phase, not an effect: the burst has to be on screen in the same frame
+    // the counter drops to zero, or the two read as unrelated events.
+    setSeen(rebirths)
+    setPlaying(rebirths)
+  }
+
+  useEffect(() => {
+    if (!playing) return undefined
+    const done = setTimeout(() => setPlaying(0), 1700)
+    return () => clearTimeout(done)
+  }, [playing])
+
+  if (!playing) return null
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-40 overflow-hidden">
+      <div
+        className="rebirth-flash absolute inset-0"
+        style={{ background: 'radial-gradient(circle at 50% 50%, #e9c9ff 0%, #a45cff55 45%, transparent 70%)' }}
+      />
+      <div
+        className="rebirth-ring absolute left-1/2 top-1/2 rounded-full border-8"
+        style={{ width: '40vmin', height: '40vmin', borderColor: '#ffffffcc' }}
+      />
+      <div className="rebirth-burst absolute left-1/2 top-1/2 flex flex-col items-center">
+        <span className={touch ? 'text-6xl' : 'text-8xl'} style={EMOJI} aria-hidden>
+          ⭐
+        </span>
+        <span
+          className={`whitespace-nowrap text-white ${touch ? 'text-3xl' : 'text-6xl'}`}
+          style={OUTLINE}
+        >
+          REBIRTH {playing}
+        </span>
+        <span
+          className={`whitespace-nowrap text-yellow-300 ${touch ? 'text-xl' : 'text-4xl'}`}
+          style={OUTLINE}
+        >
+          Every click x{rebirthMultiplier(playing)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export function RebirthPanel() {
   const open = useGame((s) => s.rebirthOpen)
-  return open ? <RebirthDialog /> : null
+  return (
+    <>
+      {open && <RebirthDialog />}
+      <RebirthBurst />
+    </>
+  )
 }
 
 /** The left-rail button that opens the panel. */
@@ -264,7 +342,10 @@ export function RebirthButton() {
       }}
     >
       <span className="pointer-events-none absolute inset-x-2 top-1 h-1.5 rounded-full bg-white/35" />
-      <span className={touch ? 'text-lg' : 'text-2xl'} aria-hidden>
+      {/* The circular arrows, as the reference art has them. The star still means
+          "how many", and it is what the badge and the panel's second row count in -
+          the arrows are the verb, the star is the score. */}
+      <span className={touch ? 'text-xl' : 'text-3xl'} style={EMOJI} aria-hidden>
         🔄
       </span>
       {/* Two sizes down from the Pets tile next to it: "Rebirth" is three letters
@@ -278,6 +359,7 @@ export function RebirthButton() {
         <span
           className="absolute -left-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 px-1 text-[11px] text-white"
           style={{ ...CHIP, borderColor: INK, background: '#f0a000' }}
+          title={`${rebirths} rebirths`}
         >
           {rebirths}
         </span>

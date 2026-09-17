@@ -3,6 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- The game waits for this before it starts (see src/main.jsx), so it is the
+         one file worth fetching before the browser has finished reading the CSS
+         that would otherwise be the first to ask for it. -->
+    <link rel="preload" href="/fonts/fredoka.woff2" as="font" type="font/woff2" crossorigin />
     <!-- maximum-scale/user-scalable: a game is not a document. Pinching is the
          camera's zoom (see FollowCamera) and a double-tap is two swings, so letting
          the browser take either of them makes the game unplayable on a phone.

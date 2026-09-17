@@ -17,7 +17,7 @@ import {
 } from './progression'
 import { playSound } from './sound'
 import { DEFAULT_SWORD, getSword } from './swords'
-import { getTrainer, TRAINERS } from './trainers'
+import { getTrainer, rebirthsShort, TRAINERS } from './trainers'
 import { getPass } from './passes'
 import { padPower, padUnlocked, padWins, WALL_RESET_DELAY_S, WALLS_PER_STAGE, wallStage } from './walls'
 
@@ -170,9 +170,20 @@ export const useGame = create(
 
       /** E on a locked training pad: buy it if affordable, then start training on it. */
       unlockTrainer: (id) => {
-        const { unlockedTrainers, wins, interact, notify } = get()
+        const { unlockedTrainers, wins, rebirths, interact, notify } = get()
         const trainer = getTrainer(id)
         if (!trainer || unlockedTrainers.includes(id)) return
+        // The top three want rebirths as well as Wins, and the rebirths are checked
+        // first: being told to go and rebirth is more use than being told a price
+        // that would not have been enough anyway.
+        const short = rebirthsShort(trainer, rebirths)
+        if (short > 0) {
+          notify(
+            `${trainer.multiplier}x training needs ${trainer.rebirths} Rebirths - ${short} to go`,
+            'error',
+          )
+          return
+        }
         // The two VIP dummies are bought with Bux, and start training straight away.
         if (trainer.bux) {
           return get().buyWithBux(trainer, () => ({

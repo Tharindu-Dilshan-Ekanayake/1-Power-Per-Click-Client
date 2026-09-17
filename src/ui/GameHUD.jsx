@@ -18,14 +18,9 @@ import {
 import { getTrainer } from '../game/trainers'
 import { PetsButton, PetsPanel } from './PetsPanel'
 import { RebirthButton, RebirthPanel } from './RebirthPanel'
+import { CHIP, OUTLINE, outlined, SOFT } from './textStyle'
 import { HUD_STRIP_H, reportStripHeight, useTouchScale } from './touchLayout'
 
-/** Chunky outlined game text. */
-const OUTLINE = {
-  fontFamily: '"Arial Black", "Segoe UI Black", Impact, sans-serif',
-  WebkitTextStroke: '1.5px #111',
-  textShadow: '0 3px 0 rgba(0,0,0,0.85), 0 0 8px rgba(0,0,0,0.5)',
-}
 const ICON_SHADOW = { filter: 'drop-shadow(0 3px 0 rgba(0,0,0,0.85))' }
 const INK = '#1b1b25'
 
@@ -39,15 +34,6 @@ const NOTICE = {
   info: { accent: '#5cc4ff', icon: ['#eaf9ff', '#5cc4ff'], bg: ['#17304a', '#111b28'] },
 }
 
-/**
- * Toast text. Deliberately not OUTLINE: a 1.5px stroke around 20px letters closes
- * up their counters and turns a sentence to mush. The card behind it is dark and
- * solid, so a soft drop shadow is all the contrast it needs.
- */
-const NOTICE_TEXT = {
-  fontFamily: '"Arial Black", "Segoe UI Black", Impact, sans-serif',
-  textShadow: '0 2px 0 rgba(0,0,0,0.55)',
-}
 
 /** Button faces for the x2 / x4 / x8 boosts: gold, orange, red. */
 const BOOST_COLORS = {
@@ -263,7 +249,7 @@ function PriceTag({ cost }) {
   return (
     <span
       className="absolute flex items-center gap-0.5 text-white"
-      style={{ ...OUTLINE, right: -2, top: -px, fontSize: px, WebkitTextStroke: '1px #111' }}
+      style={{ ...outlined(1, 2), right: -2, top: -px, fontSize: px }}
     >
       <TrophyIcon className="" style={{ width: px, height: px }} />
       {formatNumber(cost)}
@@ -295,7 +281,7 @@ function Notice({ message }) {
         >
           <NoticeIcon tone={message.tone} className="h-8 w-8" />
         </span>
-        <span className="min-w-0 text-pretty text-lg leading-snug text-white sm:text-xl" style={NOTICE_TEXT}>
+        <span className="min-w-0 text-pretty text-lg leading-snug text-white sm:text-xl" style={SOFT}>
           {message.text}
         </span>
         {/* Drains over the toast's life, so its leaving is never a surprise. */}
@@ -394,8 +380,13 @@ function WinsCounter() {
         </span>
       )}
       <BuxChip />
-      <PetsButton />
-      <RebirthButton />
+      {/* Side by side, not stacked: a rail of single buttons running down the left
+          edge eats the height a phone held sideways does not have, and the games
+          this one is laid out after pair them up for the same reason. */}
+      <div className={`flex items-start ${touch ? 'gap-1' : 'gap-2'}`}>
+        <PetsButton />
+        <RebirthButton />
+      </div>
     </div>
   )
 }
@@ -520,7 +511,7 @@ function AutoClickerButton({ kind }) {
         className={`absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md text-white ${
           touch ? '-top-2 px-1 text-[9px]' : '-top-3 px-2 text-xs'
         }`}
-        style={{ ...OUTLINE, background: INK, WebkitTextStroke: '0' }}
+        style={{ ...CHIP, background: INK }}
       >
         {op ? 'OP Auto Clicker' : 'Auto Clicker'}
       </span>

@@ -6,7 +6,7 @@ import { AdditiveBlending, BoxGeometry, Vector3 } from 'three'
 
 import { formatNumber } from '../format'
 import { useGame } from '../gameStore'
-import { DUMMY_OFFSET_Z } from '../trainers'
+import { DUMMY_OFFSET_Z, rebirthsShort } from '../trainers'
 import { remoteStates, useLobby } from '../../net/lobbyClient'
 import { Label, Sparkle } from './Effects'
 import { geometry, merge } from './geometry'
@@ -28,6 +28,8 @@ const STATUS_GLOW = {
   unlocked: 0.85,
   affordable: 0.85,
   locked: 0.45,
+  /** Wants rebirths first. Dim like `locked`, because that is what it is. */
+  rebirth: 0.45,
   /** A Bux dummy nobody has unlocked yet: for sale, so it stays lit. */
   bux: 1,
 }
@@ -70,6 +72,8 @@ const popupTexture = (gain) =>
 export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }) {
   // A Bux dummy has no `cost`, so no amount of Wins makes it "affordable" - it
   // shows as `bux` until it is bought.
+  // 'rebirth' outranks the Wins states on the top three dummies: a price you could
+  // pay is the wrong thing to show someone who cannot buy it at any price yet.
   const localStatus = useGame((s) =>
     s.activeTrainer === trainer.id
       ? 'active'
@@ -77,10 +81,13 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
         ? 'unlocked'
         : trainer.bux
           ? 'bux'
-          : s.wins >= trainer.cost
-            ? 'affordable'
-            : 'locked',
+          : rebirthsShort(trainer, s.rebirths) > 0
+            ? 'rebirth'
+            : s.wins >= trainer.cost
+              ? 'affordable'
+              : 'locked',
   )
+  const rebirthsToGo = useGame((s) => rebirthsShort(trainer, s.rebirths))
   // Someone else training here shows the same "TRAINING!" glow, even though it's
   // not us - other players' training pads should look alive to us too.
   const remoteActive = useLobby((s) => Object.values(s.players).some((p) => p.trainer === trainer.id))
@@ -170,11 +177,17 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
         ? { text: trainer.cost === 0 ? 'FREE' : 'UNLOCKED', fill: '#7fd8ff' }
         : status === 'bux'
           ? { text: `${trainer.bux} Bux`, icon: 'bux', fill: GEM }
-          : {
+          : status === 'rebirth'
+            ? {
+                text: `${trainer.rebirths} Rebirth${trainer.rebirths === 1 ? '' : 's'}`,
+                icon: 'star',
+                fill: ['#e6c9ff', '#a45cff'],
+              }
+            : {
               text: `${formatNumber(trainer.cost)} Wins`,
               icon: 'trophy',
-              fill: status === 'affordable' ? ['#fff6a8', '#ffc21a'] : ['#ffd0d0', '#ff7a7a'],
-            }
+                fill: status === 'affordable' ? ['#fff6a8', '#ffc21a'] : ['#ffd0d0', '#ff7a7a'],
+              }
 
 
   return (
@@ -275,19 +288,25 @@ export function TrainingDummy({ trainer, position, rotationY = 0, labelY = 4.9 }
         />
       </Billboard>
 
-      {offered && (status === 'affordable' || status === 'locked' || status === 'bux') && (
-        <InteractPrompt
-          position={[0, 2.4, DUMMY_OFFSET_Z / 2]}
-          action="Unlock"
-          title={`${trainer.multiplier}x Training`}
-          detail={
-            status === 'bux'
-              ? `💎 ${trainer.bux} Bux  -  yours for good`
-              : `🏆 ${formatNumber(trainer.cost)} Wins${status === 'locked' ? ' · not enough Wins' : ''}`
-          }
-          tone={status === 'locked' ? 'warn' : 'normal'}
-        />
-      )}
+      {offered &&
+        (status === 'affordable' ||
+          status === 'locked' ||
+          status === 'bux' ||
+          status === 'rebirth') && (
+          <InteractPrompt
+            position={[0, 2.4, DUMMY_OFFSET_Z / 2]}
+            action="Unlock"
+            title={`${trainer.multiplier}x Training`}
+            detail={
+              status === 'rebirth'
+                ? `⭐ ${trainer.rebirths} Rebirths · ${rebirthsToGo} to go`
+                : status === 'bux'
+                  ? `💎 ${trainer.bux} Bux  -  yours for good`
+                  : `🏆 ${formatNumber(trainer.cost)} Wins${status === 'locked' ? ' · not enough Wins' : ''}`
+            }
+            tone={status === 'locked' || status === 'rebirth' ? 'warn' : 'normal'}
+          />
+        )}
 
       <RigidBody type="fixed" colliders={false}>
         {/* Solid dummy, so you can't walk through it. */}

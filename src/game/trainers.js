@@ -4,6 +4,13 @@
  * cost:       Wins to unlock it for good (the first is free)
  * multiplier: Power-per-click multiplier while standing on its pad
  *
+ * rebirths:   rebirths needed as well as the Wins, on the top three only. Both gates
+ *             have to be open; the Wins alone will not do it. They are what the
+ *             ladder points at once the level bar has nothing left to fill - without
+ *             them a rebirth buys a bigger number and nothing to spend it on, and
+ *             the last three dummies are simply bought the day a player can afford
+ *             them and never thought about again. See game/progression.js.
+ *
  * bux:        set instead of `cost` on the two VIP dummies - they are unlocked with
  *             Bux and stand on their own platform away from the rows (see
  *             world/layout.js). `sku` is the IAP they buy, which must exist and be
@@ -18,9 +25,9 @@ export const TRAINERS = [
   { id: 'dummy-5', multiplier: 10, cost: 600, color: '#a45cff' },
   { id: 'dummy-6', multiplier: 25, cost: 1500, color: '#ff8f2e' },
   { id: 'dummy-7', multiplier: 50, cost: 4000, color: '#2fe0d0' },
-  { id: 'dummy-8', multiplier: 100, cost: 10000, color: '#ff5fb8' },
-  { id: 'dummy-9', multiplier: 200, cost: 25000, color: '#c8ff3a' },
-  { id: 'dummy-10', multiplier: 450, cost: 60000, color: '#ff3b6b' },
+  { id: 'dummy-8', multiplier: 100, cost: 10000, rebirths: 1, color: '#ff5fb8' },
+  { id: 'dummy-9', multiplier: 200, cost: 25000, rebirths: 2, color: '#c8ff3a' },
+  { id: 'dummy-10', multiplier: 450, cost: 60000, rebirths: 3, color: '#ff3b6b' },
 
   // --- Bux dummies. Shortcuts rather than an end point: 250x slots between the
   // Wins ladder's 200x and 450x, 1000x above both. Same shape as the Bux blades -
@@ -42,3 +49,7 @@ export const DUMMY_OFFSET_Z = -2.6
 
 /** @returns the trainer, or undefined for an unknown / null id. */
 export const getTrainer = (id) => TRAINERS.find((t) => t.id === id)
+
+/** How many more rebirths this dummy wants; 0 once it wants none. */
+export const rebirthsShort = (trainer, rebirths) =>
+  Math.max(0, (trainer?.rebirths ?? 0) - rebirths)
