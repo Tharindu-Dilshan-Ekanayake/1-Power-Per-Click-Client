@@ -207,7 +207,11 @@ export function InfinityWall({ position = [0, 0, 0] }) {
     const t = now - s.hitAt
     const flash = t < FLASH_S ? 1 - t / FLASH_S : 0
     if (slab.current) slab.current.position.x = t < SHAKE_S ? Math.sin(t * 80) * 0.12 * (1 - t / SHAKE_S) : 0
-    if (impact.current) impact.current.position.set(s.hitX, 2.6, WALL_Z + DEPTH / 2 + 0.08)
+    // Hidden while faded out; see the same flash in world/StageWall.jsx.
+    if (impact.current) {
+      impact.current.visible = flash > 0
+      if (flash > 0) impact.current.position.set(s.hitX, 2.6, WALL_Z + DEPTH / 2 + 0.08)
+    }
     if (impactMaterial.current) impactMaterial.current.opacity = flash
     const emissive = glowStrength * (0.8 + 0.2 * Math.sin(clock.elapsedTime * 1.5 + number)) + flash * 0.35
     if (surfaceMat.current) surfaceMat.current.emissiveIntensity = emissive
@@ -236,6 +240,9 @@ export function InfinityWall({ position = [0, 0, 0] }) {
         mesh.setMatrixAt(i, _m.compose(_p, _q, _s.setScalar(size)))
       }
       if (dirty) mesh.instanceMatrix.needsUpdate = true
+      // `dirty` is exactly "something was in flight this frame", which is also the
+      // only time the mesh has anything to show: every other chunk is scaled to zero.
+      if (mesh.visible !== dirty) mesh.visible = dirty
     }
 
     popups.current.forEach((popup, i) => {

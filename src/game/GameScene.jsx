@@ -102,6 +102,26 @@ export function GameScene() {
   const quality = useSettings((s) => s.quality)
   const { dpr, shadows, physicsHz, solverIterations } = qualityOf(quality)
 
+  /**
+   * What the renderer is built with, fixed for the session.
+   *
+   * Everything else the graphics level changes can be pushed at a live renderer;
+   * these belong to the drawing buffer, which exists from the moment the canvas gets
+   * its context. R3F reads the `gl` prop once and never again, so re-reading the
+   * level here would silently do nothing - hence the state initialiser, which says
+   * plainly that the level at the first render is the one that counts.
+   *
+   * `stencil: false` drops a buffer nothing in the game draws through, which is a
+   * byte per pixel the GPU stops reading and writing every frame. (`alpha: false`
+   * belongs next to it and is not here on purpose: three asks for an alpha channel
+   * unconditionally these days and uses that parameter only for the clear colour's
+   * alpha, so passing it would look like a saving and be none.)
+   */
+  const [glOptions] = useState(() => ({
+    antialias: qualityOf(useSettings.getState().quality).antialias,
+    stencil: false,
+  }))
+
   const [avatarReady, setAvatarReady] = useState(false)
   const loadingEnded = useRef(false)
 
@@ -137,6 +157,7 @@ export function GameScene() {
     <Canvas
       shadows={shadows}
       dpr={dpr}
+      gl={glOptions}
       camera={{ position: [0, 5, 40], fov: 60, far: 1200 }}
       onCreated={({ gl }) => gl.setClearColor('#bfe4ff')}
     >

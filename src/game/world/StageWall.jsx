@@ -268,7 +268,15 @@ export function StageWall({ number, stage, theme, zFront }) {
     const t = now - s.hitAt
     const flash = t < FLASH_S ? 1 - t / FLASH_S : 0
     if (slab.current) slab.current.position.x = t < SHAKE_S ? Math.sin(t * 80) * 0.12 * (1 - t / SHAKE_S) : 0
-    if (impact.current) impact.current.position.set(s.hitX, 2.6, WALL_Z + s.side * (DEPTH / 2 + 0.08))
+    // Hidden rather than merely invisible while it is faded out. A wall is unhit for
+    // almost all of its life, and an additive quad at zero opacity is not free: it is
+    // still a draw call, and it still blends every pixel of four and a half metres of
+    // screen to arrive at the colour that was already there. Same reason the debris
+    // mesh below hides itself, and the popups after it.
+    if (impact.current) {
+      impact.current.visible = flash > 0
+      if (flash > 0) impact.current.position.set(s.hitX, 2.6, WALL_Z + s.side * (DEPTH / 2 + 0.08))
+    }
     if (impactMaterial.current) impactMaterial.current.opacity = flash
     const emissive = glowStrength * (0.8 + 0.2 * Math.sin(clock.elapsedTime * 1.5 + number)) + flash * 0.35
     for (const material of surfaces.current) if (material) material.emissiveIntensity = emissive
@@ -375,6 +383,7 @@ export function StageWall({ number, stage, theme, zFront }) {
 
         <mesh ref={impact}>
           <planeGeometry args={[4.5, 4.5]} />
+          {/* forceSinglePass: see the note in world/Effects.jsx. */}
           <meshBasicMaterial
             ref={impactMaterial}
             map={radialGlowTexture()}
@@ -384,6 +393,7 @@ export function StageWall({ number, stage, theme, zFront }) {
             blending={AdditiveBlending}
             depthWrite={false}
             side={DoubleSide}
+            forceSinglePass
             toneMapped={false}
           />
         </mesh>
